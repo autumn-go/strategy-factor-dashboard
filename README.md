@@ -32,6 +32,7 @@
 | `etf_mapping.py` | 把 Top 板块 / 行业映射到**可买场内 ETF**（走 westock 搜索 + 流动性过滤） |
 | `build_report.py` | 渲染 HTML 日报（ECharts） |
 | `publish_pages.py` | 发布到 GitHub Pages（Contents API） |
+| `publish_code.py` | 把源码同步到本开源仓库（Git Data API，支持 `--dry`） |
 | `feishu_push.py` | 推送飞书交互卡片（含跳转按钮） |
 | `daily_run.sh` | 一键跑批（8 步） |
 
@@ -40,7 +41,6 @@
 ## 二、目录结构
 
 ```
-strategy-factor-dashboard/
 ├── index.html                 # Pages 首页（脚本自动发布，勿手改）
 ├── boci_industries.html       # BOCI 行业情绪交互页（脚本自动发布）
 ├── report_YYYYMMDD.html       # 每日归档
@@ -54,7 +54,8 @@ strategy-factor-dashboard/
 │   │   ├── etf_mapping.py
 │   │   ├── full_backfill.py   # 全量因子回填 + 回测
 │   │   ├── build_report.py
-│   │   ├── publish_pages.py
+│   │   ├── publish_pages.py   # 发布 HTML 到 GitHub Pages
+│   │   ├── publish_code.py    # 同步源码到本仓库
 │   │   ├── feishu_push.py
 │   │   ├── feishu_preview.py  # 本地预览飞书卡片样式
 │   │   ├── daily_run.sh

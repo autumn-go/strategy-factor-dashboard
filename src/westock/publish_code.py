@@ -86,6 +86,11 @@ def collect(mapping):
     ex = os.path.join(HERE, 'config', 'feishu.example.json')
     if os.path.exists(ex):
         out.append((ex, 'src/westock/config/feishu.example.json'))
+    # 仓库根目录的说明与忽略规则
+    for extra in ('README.md', '.gitignore'):
+        fp = os.path.join(PLATFORM, extra)
+        if os.path.exists(fp):
+            out.append((fp, extra))
     return out
 
 
