@@ -19,6 +19,7 @@
 | **形态学扫描** | `morphology_engine.py` | 赚钱效应等形态学因子 + 策略信号打标（同花顺一级行业） |
 | **RF 趋势择时** | `rf_engine.py` | Range Filter，PineScript v5 版本还原（**当前日报已弃用**，保留供参考） |
 | **RRG 相对轮动 + NN** | `rrg_engine.py` / `rrg_nn_model.py` | 相对轮动图（日 / 周频）+ 神经网络打分模型 |
+| **缠论三类买点** | `chan-lun/core/chan_scan.py` | czsc 笔序列 + 自研中枢/一买二买三买判定，沪深300+中证500+中证1000 全市场盘后扫描（**独立工具链**，见 `src/chan-lun/`） |
 
 ### 每日信号链路（`src/westock/`）
 
@@ -35,6 +36,25 @@
 | `publish_code.py` | 把源码同步到本开源仓库（Git Data API，支持 `--dry`） |
 | `feishu_push.py` | 推送飞书交互卡片（含跳转按钮） |
 | `daily_run.sh` | 一键跑批（8 步） |
+
+### 缠论三类买点扫描器（`src/chan-lun/`）
+
+独立的**个股层面**盘后扫描工具链（不依赖本平台的行业数据），链路：
+**腾讯日K → czsc 0.8.30 生成笔序列 → 自研中枢/一买二买三买判定 → A/B/C 分级 → HTML 报告 → 飞书推送**。
+
+| 文件 | 职责 |
+|---|---|
+| `run_daily.py` / `run_daily.sh` | 主入口（交易日判断 → 抓K线 → 扫描 → 报告 → 发布 → 推送） |
+| `core/config.py` | 全部判据参数（买点阈值、新鲜窗口、流动性下限，可用环境变量覆盖） |
+| `core/fetch_kline.py` | 腾讯日K抓取（14 并发，前复权） |
+| `core/chan_scan.py` | 缠论核心：czsc `bi_list` 笔 + 自研中枢与三类买点 |
+| `core/report_gen.py` | HTML 报告 + 纯文本摘要 |
+| `setup.sh` / `update_pool.sh` | 一键初始化 / 重建股票池（westock 官方成分股接口） |
+| `publish_report.py` | 报告发布到 `autumn-go/chan-report` 的 GitHub Pages |
+| `push_feishu.py` | 飞书推送（交互卡片 / 文本 / bot 三通道） |
+
+> 判据速览：**一买**=底背驰（力度衰减 ≤ 前段 0.92）+ 新鲜窗口 ≤6 交易日；**二买**=显著低点后反弹 ≥8% 且回撤 ≤ 上涨段 75%；**三买**=突破中枢上沿后回抽不破。
+> czsc 用 **0.8.30 `--no-deps`** 作笔序列引擎（0.9.x 依赖装不上、1.0.x 移除了所需 API），中枢/买点判定全为自研。
 
 ---
 
@@ -62,6 +82,13 @@
 │   │   └── config/
 │   │       └── feishu.example.json
 │   ├── engines/               # 策略引擎（可独立调用）
+│   ├── chan-lun/              # 缠论三类买点盘后扫描器（独立工具链）
+│   │   ├── run_daily.py       # 主入口
+│   │   ├── core/              # config / fetch_kline / chan_scan / report_gen
+│   │   ├── push_feishu.py     # 飞书推送（交互卡片）
+│   │   ├── publish_report.py  # 发布到 chan-report 仓库 Pages
+│   │   ├── pool/pool.tsv      # 股票池（沪深300+中证500+中证1000）
+│   │   └── .env.example       # 推送 / 发布配置模板
 │   ├── static/                # 原平台前端页面
 │   └── models/                # RRG 神经网络权重
 └── README.md
@@ -136,6 +163,18 @@ python3 feishu_push.py --dry # 只看推送内容
 
 > 脚本内的数据库路径常量（如 `LOCAL_DB_DIR`）按你本机布局调整即可，
 > `westock_source.py` 的 `BASE_DIR` 已相对文件位置自适应。
+
+### 4. 缠论扫描器（可选，独立工具链）
+
+```bash
+cd src/chan-lun
+bash setup.sh          # 建 venv（czsc 0.8.30 --no-deps）+ 重建股票池 + 冒烟
+cp .env.example .env   # 填飞书 webhook / CHAN_PAGES_URL
+bash run_daily.sh      # 盘后跑一次（非交易日自动跳过）
+```
+
+venv 定位优先级 `CHAN_VENV` → `~/.workbuddy/.../envs/chan09b` → 项目内 `.venv`，
+可用 `CHAN_PYTHON` 指定建 venv 的 python3。详见 `src/chan-lun/README.md`。
 
 ---
 
