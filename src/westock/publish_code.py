@@ -8,10 +8,12 @@
   local strategy-platform/models/*      -> 仓库 src/models/
   local strategy-platform/westock/*.py  -> 仓库 src/westock/
   local strategy-platform/westock/daily_run.sh -> src/westock/
+  local ~/chan-scanner/**               -> 仓库 src/chan-lun/
 
 排除清单（敏感 / 大数据 / 无需开源）：
-  .ghtoken  .webhook  config/feishu.json  cache/  output/  data/  local_dbs/
-  __pycache__  static/plotly.min.js（第三方库，3.6MB）
+  .ghtoken  .webhook  .env  .env.example?  config/feishu.json  cache/
+  output/  data/  local_dbs/  logs/  __pycache__
+  static/plotly.min.js（第三方库，3.6MB）
 
 用法：
   python3 publish_code.py            # 同步上传
@@ -28,6 +30,7 @@ import urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLATFORM = os.path.dirname(HERE)          # strategy-platform/
+CHAN_DIR = os.path.expanduser('~/chan-scanner')   # 缠论盘后扫描器（独立目录）
 
 OWNER = 'autumn-go'
 REPO = 'strategy-factor-dashboard'
@@ -41,6 +44,12 @@ EXCLUDE_NAMES = {
     'backfill.log',
 }
 EXCLUDE_SUFFIX = ('.pkl', '.db', '.db-journal', '.pyc')
+
+# 缠论目录专用排除（目录名 + 文件名）
+CHAN_EXCLUDE_DIRS = {'data', 'output', 'logs', '__pycache__', '.workbuddy',
+                     '.git', '.venv'}
+CHAN_EXCLUDE_NAMES = {'.env', '.DS_Store', '.ghtoken', '.webhook'}
+CHAN_SUFFIX = ('.py', '.sh', '.md', '.tsv', '.example', '.gitignore')
 
 
 def get_token():
@@ -94,6 +103,26 @@ def collect(mapping):
     return out
 
 
+def collect_chan():
+    """缠论盘后扫描器（~/chan-scanner）→ 仓库 src/chan-lun/（递归，排除运行时/敏感文件）"""
+    out = []
+    if not os.path.isdir(CHAN_DIR):
+        return out
+    for dirpath, dirnames, filenames in os.walk(CHAN_DIR):
+        dirnames[:] = sorted(d for d in dirnames if d not in CHAN_EXCLUDE_DIRS)
+        rel_dir = os.path.relpath(dirpath, CHAN_DIR)
+        for name in sorted(filenames):
+            if name in CHAN_EXCLUDE_NAMES:
+                continue
+            if not name.endswith(CHAN_SUFFIX):
+                continue
+            fp = os.path.join(dirpath, name)
+            rel = (f'src/chan-lun/{name}' if rel_dir == '.'
+                   else f'src/chan-lun/{rel_dir}/{name}')
+            out.append((fp, rel.replace(os.sep, '/')))
+    return out
+
+
 def main():
     dry = '--dry' in sys.argv
     token = get_token()
@@ -107,7 +136,7 @@ def main():
         (os.path.join(PLATFORM, 'static'), 'src/static'),
         (os.path.join(PLATFORM, 'models'), 'src/models'),
     ]
-    files = collect(mapping)
+    files = collect(mapping) + collect_chan()
     print(f'将同步 {len(files)} 个文件:')
     for fp, rel in files:
         print(f'  {rel:<48} {os.path.getsize(fp)/1024:>8.1f} KB')
