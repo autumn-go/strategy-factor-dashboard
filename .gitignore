@@ -1,0 +1,29 @@
+# 凭据（切勿提交）
+.ghtoken
+.webhook
+src/westock/.ghtoken
+src/westock/.webhook
+src/westock/config/feishu.json
+
+# 数据与缓存（体积大 / 需自行生成）
+cache/
+output/
+data/
+local_dbs/
+*.pkl
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 系统
+.DS_Store
+Thumbs.db
+*~
+
+# 注意：index.html / boci_industries.html / report_*.html 是 Pages 产物，
+# 需要保留在仓库中（publish_pages.py 会覆盖更新），**不要**加入忽略。
