@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宽基指数情绪指数</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a;
+    --text: #e4e4e7; --text2: #9ca3af; --green: #22c55e;
+    --red: #ef4444; --blue: #3b82f6; --yellow: #f59e0b;
+    --purple: #a855f7; --cyan: #06b6d4;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:20px; }
+
+  .header { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
+  .header h1 { font-size:20px; font-weight:600; }
+  .tag { padding:3px 10px; border-radius:20px; font-size:12px; background:rgba(107,114,128,0.2); color:var(--text2); }
+  .tag.idle { background:rgba(107,114,128,0.2); color:var(--text2); }
+  .tag.running { background:rgba(245,158,11,0.15); color:var(--yellow); }
+  .tag.ready { background:rgba(34,197,94,0.15); color:var(--green); }
+
+  .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+  .btn { padding:7px 16px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text); cursor:pointer; font-size:13px; transition:all .2s; }
+  .btn:hover { border-color:var(--text2); }
+  .btn.primary { border-color:var(--blue); color:var(--blue); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  .progress-bar { width:100%; height:3px; background:var(--border); border-radius:2px; margin-bottom:16px; display:none; }
+  .progress-bar .fill { height:100%; background:var(--blue); border-radius:2px; transition:width .3s; }
+
+  /* 最新值面板 */
+  .latest-panel { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+  .latest-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .latest-card .name { font-size:14px; color:var(--text2); margin-bottom:8px; }
+  .latest-card .value { font-size:28px; font-weight:700; }
+  .latest-card .date { font-size:11px; color:var(--text2); margin-top:6px; }
+  .latest-card .factors { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; }
+  .latest-card .factor-item { font-size:11px; color:var(--text2); }
+  .latest-card .factor-item span { color:var(--text); font-weight:500; }
+
+  /* 图表区域 */
+  .chart-section { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .chart-section h3 { font-size:14px; font-weight:500; margin-bottom:12px; color:var(--text2); }
+
+  .iframe-wrap { width:100%; height:420px; }
+  .iframe-wrap iframe { width:100%; height:100%; border:none; }
+
+  /* 子指标选择 */
+  .factor-tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .factor-tab { padding:5px 12px; border:1px solid var(--border); border-radius:4px; font-size:12px; cursor:pointer; background:transparent; color:var(--text2); transition:all .2s; }
+  .factor-tab.active { border-color:var(--blue); color:var(--blue); background:rgba(59,130,246,0.1); }
+
+  @media (max-width:768px) {
+    .latest-panel { grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>宽基指数情绪指数</h1>
+  <span class="tag idle" id="status-tag">待命</span>
+</div>
+
+<div class="toolbar">
+  <button class="btn primary" id="btn-calc" onclick="startCalc()">全量计算</button>
+  <button class="btn" id="btn-refresh" onclick="startRefresh()" style="border-color:var(--green);color:var(--green)">增量刷新</button>
+  <div style="flex:1"></div>
+  <span id="info-text" style="color:var(--text2);font-size:12px"></span>
+</div>
+
+<div class="progress-bar" id="progress-bar">
+  <div class="fill" id="progress-fill" style="width:0%"></div>
+</div>
+
+<!-- 最新值面板 -->
+<div class="latest-panel" id="latest-panel">
+  <div class="latest-card" id="card-000001.SH">
+    <div class="name">上证指数</div>
+    <div class="value" id="val-000001.SH">--</div>
+    <div class="date" id="date-000001.SH"></div>
+    <div class="factors" id="factors-000001.SH"></div>
+  </div>
+  <div class="latest-card" id="card-000300.SH">
+    <div class="name">沪深300</div>
+    <div class="value" id="val-000300.SH">--</div>
+    <div class="date" id="date-000300.SH"></div>
+    <div class="factors" id="factors-000300.SH"></div>
+  </div>
+  <div class="latest-card" id="card-000852.SH">
+    <div class="name">中证1000</div>
+    <div class="value" id="val-000852.SH">--</div>
+    <div class="date" id="date-000852.SH"></div>
+    <div class="factors" id="factors-000852.SH"></div>
+  </div>
+  <div class="latest-card" id="card-932000.CSI">
+    <div class="name">中证2000</div>
+    <div class="value" id="val-932000.CSI">--</div>
+    <div class="date" id="date-932000.CSI"></div>
+    <div class="factors" id="factors-932000.CSI"></div>
+  </div>
+</div>
+
+<!-- 综合情绪时序图 -->
+<div class="chart-section">
+  <h3>综合情绪时序图</h3>
+  <div class="iframe-wrap" id="chart-main"></div>
+</div>
+
+<!-- 子指标时序图 -->
+<div class="chart-section">
+  <h3>子指标时序图</h3>
+  <div class="factor-tabs">
+    <button class="factor-tab active" data-factor="f1_ma20" onclick="switchFactor(this)">F1 MA20占比</button>
+    <button class="factor-tab" data-factor="f2_rsi" onclick="switchFactor(this)">F2 RSI</button>
+    <button class="factor-tab" data-factor="f3_turnover" onclick="switchFactor(this)">F3 换手率</button>
+    <button class="factor-tab" data-factor="f4_limit" onclick="switchFactor(this)">F4 涨跌停</button>
+    <button class="factor-tab" data-factor="f5_amount" onclick="switchFactor(this)">F5 成交额占比</button>
+  </div>
+  <div class="iframe-wrap" id="chart-factor"></div>
+</div>
+
+<script>
+const COLORS = {
+  '000001.SH': '#ef4444',   // 上证-红
+  '000300.SH': '#3b82f6',   // 沪深300-蓝
+  '000852.SH': '#22c55e',   // 中证1000-绿
+  '932000.CSI': '#a855f7',  // 中证2000-紫
+};
+const NAMES = {
+  '000001.SH': '上证指数',
+  '000300.SH': '沪深300',
+  '000852.SH': '中证1000',
+  '932000.CSI': '中证2000',
+};
+
+let chartData = null;
+let currentFactor = 'f1_ma20';
+
+// API 工具
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// 加载状态
+async function loadStatus() {
+  try {
+    const st = await api('/api/index-sentiment/status');
+    const tag = document.getElementById('status-tag');
+    const info = document.getElementById('info-text');
+
+    if (st.calc_running) {
+      tag.className = 'tag running';
+      tag.textContent = '计算中';
+      info.textContent = st.calc_message || '计算中...';
+      const pct = st.calc_total > 0 ? Math.round(st.calc_progress / st.calc_total * 100) : 0;
+      document.getElementById('progress-bar').style.display = 'block';
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('btn-calc').disabled = true;
+      document.getElementById('btn-refresh').disabled = true;
+      setTimeout(loadStatus, 2000);
+    } else {
+      tag.className = 'tag ' + (st.has_data ? 'ready' : 'idle');
+      tag.textContent = st.has_data ? '已就绪' : '待命';
+      document.getElementById('progress-bar').style.display = 'none';
+      document.getElementById('btn-calc').disabled = false;
+      document.getElementById('btn-refresh').disabled = !st.has_data;
+
+      if (st.has_data) {
+        info.textContent = `${st.trade_days} 个交易日, ${st.min_date} ~ ${st.max_date}`;
+        loadLatest();
+        loadChart();
+      } else {
+        info.textContent = '暂无数据，请先执行全量计算';
+      }
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// 加载最新值
+async function loadLatest() {
+  try {
+    const data = await api('/api/index-sentiment/latest');
+    for (const [code, info] of Object.entries(data)) {
+      const valEl = document.getElementById('val-' + code);
+      const dateEl = document.getElementById('date-' + code);
+      const factorsEl = document.getElementById('factors-' + code);
+
+      if (valEl) {
+        const v = info.sentiment;
+        valEl.textContent = v !== null ? v.toFixed(4) : '--';
+        valEl.style.color = v >= 0.5 ? 'var(--green)' : 'var(--red)';
+      }
+      if (dateEl) {
+        dateEl.textContent = info.date || '';
+      }
+      if (factorsEl && info.factors) {
+        const fNames = {f1_ma20:'MA20', f2_rsi:'RSI', f3_turnover:'换手', f4_limit:'涨跌停', f5_amount:'成交额'};
+        factorsEl.innerHTML = Object.entries(info.factors).map(([k,v]) =>
+          `<div class="factor-item">${fNames[k]||k}: <span>${v !== null ? v.toFixed(4) : '-'}</span></div>`
+        ).join('');
+      }
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// 绘制图表（使用 Plotly）
+function renderChart(containerId, data, field, title) {
+  const traces = [];
+  for (const idx of data) {
+    traces.push({
+      x: idx.dates,
+      y: idx[field],
+      name: idx.name,
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: COLORS[idx.code] || '#ccc', width: 1.5 },
+      connectgaps: true,
+    });
+  }
+
+  // 添加0.5参考线
+  const shapes = [{
+    type: 'line', x0: 0, x1: 1, xref: 'paper',
+    y0: 0.5, y1: 0.5, yref: 'y',
+    line: { color: 'rgba(255,255,255,0.2)', width: 1, dash: 'dash' }
+  }];
+
+  // 添加0.85过热线和0.15冰点线
+  shapes.push({
+    type: 'line', x0: 0, x1: 1, xref: 'paper',
+    y0: 0.85, y1: 0.85, yref: 'y',
+    line: { color: 'rgba(239,68,68,0.3)', width: 1, dash: 'dot' }
+  });
+  shapes.push({
+    type: 'line', x0: 0, x1: 1, xref: 'paper',
+    y0: 0.15, y1: 0.15, yref: 'y',
+    line: { color: 'rgba(59,130,246,0.3)', width: 1, dash: 'dot' }
+  });
+
+  const layout = {
+    title: { text: title, font: { size: 13, color: '#9ca3af' } },
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: '#9ca3af', size: 11 },
+    margin: { l: 50, r: 20, t: 40, b: 40 },
+    xaxis: { gridcolor: '#2a2d3a', type: 'date', tickformat: '%Y-%m-%d', hoverformat: '%Y-%m-%d' },
+    yaxis: { gridcolor: '#2a2d3a', range: [0, 1], dtick: 0.2 },
+    legend: { orientation: 'h', y: -0.15, font: { size: 11 } },
+    shapes: shapes,
+    annotations: [
+      { x: 1, xref: 'paper', y: 0.85, text: '过热 0.85', showarrow: false, font: { size: 10, color: 'rgba(239,68,68,0.5)' }, xanchor: 'right' },
+      { x: 1, xref: 'paper', y: 0.15, text: '冰点 0.15', showarrow: false, font: { size: 10, color: 'rgba(59,130,246,0.5)' }, xanchor: 'right' },
+    ],
+  };
+
+  const d3 = Plotly.d3;
+  Plotly.newPlot(containerId, traces, layout, { responsive: true, displayModeBar: false });
+}
+
+async function loadChart() {
+  try {
+    chartData = await api('/api/index-sentiment/chart');
+    if (!chartData || chartData.length === 0) return;
+
+    // 综合情绪图
+    renderChart('chart-main', chartData, 'sentiment', '综合情绪指标（5因子等权）');
+
+    // 子指标图
+    renderChart('chart-factor', chartData, currentFactor, getFactorTitle(currentFactor));
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function getFactorTitle(f) {
+  const map = {
+    f1_ma20: 'F1 MA20多头占比',
+    f2_rsi: 'F2 RSI相对强弱',
+    f3_turnover: 'F3 换手率强度',
+    f4_limit: 'F4 涨跌停情绪差',
+    f5_amount: 'F5 成交额占比',
+  };
+  return map[f] || f;
+}
+
+function switchFactor(btn) {
+  document.querySelectorAll('.factor-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  currentFactor = btn.dataset.factor;
+  if (chartData) {
+    renderChart('chart-factor', chartData, currentFactor, getFactorTitle(currentFactor));
+  }
+}
+
+// 开始全量计算
+async function startCalc() {
+  try {
+    const r = await fetch('/api/index-sentiment/calculate', { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    document.getElementById('btn-calc').disabled = true;
+    document.getElementById('btn-refresh').disabled = true;
+    loadStatus();
+    pollUntilDone();
+  } catch(e) {
+    alert('启动失败: ' + e.message);
+  }
+}
+
+// 增量刷新
+async function startRefresh() {
+  try {
+    const r = await fetch('/api/index-sentiment/refresh', { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    document.getElementById('btn-calc').disabled = true;
+    document.getElementById('btn-refresh').disabled = true;
+    loadStatus();
+    pollUntilDone();
+  } catch(e) {
+    alert('刷新失败: ' + e.message);
+  }
+}
+
+function pollUntilDone() {
+  const check = setInterval(async () => {
+    const st = await api('/api/index-sentiment/status');
+    if (!st.calc_running) {
+      clearInterval(check);
+      loadStatus();
+    }
+  }, 3000);
+}
+
+// 加载 Plotly
+function loadPlotly() {
+  return new Promise((resolve, reject) => {
+    if (window.Plotly) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = '/static/plotly.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+loadPlotly().then(() => {
+  loadStatus();
+});
+</script>
+</body>
+</html>

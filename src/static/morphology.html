@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>形态学监控 - 策略因子平台</title>
+<style>
+:root {
+  --bg: #0a0e17; --bg2: #111827; --bg3: #1a2234;
+  --border: #2a3548; --text: #e2e8f0; --text2: #94a3b8;
+  --accent: #3b82f6; --accent2: #60a5fa;
+  --red: #ef4444; --green: #22c55e; --yellow: #f59e0b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 16px 30px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; font-weight: 600; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.back { color: var(--text2); text-decoration: none; font-size: 13px; }
+.back:hover { color: var(--accent); }
+.container { padding: 20px 30px; max-width: 1400px; margin: 0 auto; }
+
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.toolbar select, .toolbar button { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.toolbar button:hover { border-color: var(--accent); }
+.toolbar .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.toolbar .btn-primary:hover { background: #2563eb; }
+.toolbar .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; min-width: 140px; }
+.stat-card .label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+.stat-card .value { font-size: 18px; font-weight: 600; }
+.stat-card .value.hot { color: var(--red); }
+.stat-card .value.cold { color: #38bdf8; }
+.stat-card .value.warm { color: var(--green); }
+
+.temp-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.temp-chip { font-size: 12px; padding: 4px 10px; border-radius: 12px; background: var(--bg3); border: 1px solid var(--border); }
+.temp-chip .cnt { font-weight: 600; margin-left: 4px; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: var(--bg3); color: var(--text2); font-weight: 500; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; cursor: pointer; white-space: nowrap; }
+th:hover { color: var(--accent); }
+td { padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr:hover { background: rgba(59,130,246,0.05); }
+tr.has-signal { background: rgba(59,130,246,0.08); }
+tr.has-signal:hover { background: rgba(59,130,246,0.12); }
+
+.signal-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin: 1px 3px; white-space: nowrap; }
+.signal-tag.me { background: rgba(34,197,94,0.15); color: var(--green); }
+.signal-tag.bull { background: rgba(245,158,11,0.15); color: var(--yellow); }
+.signal-tag.weak { background: rgba(168,85,247,0.15); color: #a78bfa; }
+.signal-tag.gold { background: rgba(239,68,68,0.15); color: var(--red); }
+
+.kline-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin: 1px 3px; }
+.kline-tag.bottom { background: rgba(56,189,248,0.15); color: #38bdf8; }
+.kline-tag.breakout { background: rgba(245,158,11,0.15); color: var(--yellow); }
+.kline-tag.uptrend { background: rgba(239,68,68,0.15); color: var(--red); }
+.kline-tag.accel { background: rgba(168,85,247,0.15); color: #a78bfa; }
+
+.tg-bar { display: inline-block; width: 50px; height: 6px; border-radius: 3px; background: var(--bg3); vertical-align: middle; margin-left: 6px; }
+.tg-bar-fill { height: 100%; border-radius: 3px; }
+
+.name-link { color: var(--accent2); cursor: pointer; text-decoration: none; }
+.name-link:hover { text-decoration: underline; }
+
+/* 详情弹窗 */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; display: none; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 900px; max-height: 85vh; overflow-y: auto; padding: 24px; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-header h2 { font-size: 16px; font-weight: 600; }
+.modal-close { color: var(--text2); cursor: pointer; font-size: 20px; background: none; border: none; }
+.modal-close:hover { color: var(--text); }
+
+.factor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.factor-item { background: var(--bg3); border-radius: 8px; padding: 10px 14px; }
+.factor-item .flabel { font-size: 11px; color: var(--text2); }
+.factor-item .fval { font-size: 16px; font-weight: 600; margin-top: 2px; }
+
+.chart-area { width: 100%; height: 350px; margin-top: 12px; }
+.loading { text-align: center; padding: 40px; color: var(--text2); }
+
+.pagination { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+.pagination button { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
+.pagination button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>形态学监控</h1>
+    <a class="back" href="/">返回首页</a>
+  </div>
+  <div id="statusText" style="font-size:13px;color:var(--text2);"></div>
+</div>
+
+<div class="container">
+  <div class="toolbar">
+    <select id="dateSelect" onchange="loadScan()"><option value="">加载中...</option></select>
+    <select id="signalFilter" onchange="loadScan()">
+      <option value="全部">全部信号</option>
+      <option value="赚钱效应优选">赚钱效应优选</option>
+      <option value="牛回头">牛回头</option>
+      <option value="弱势反转">弱势反转</option>
+      <option value="弱势反弹">弱势反弹</option>
+      <option value="黄金坑">黄金坑</option>
+    </select>
+    <select id="tgFilter" onchange="loadScan()">
+      <option value="全部">全部温度</option>
+      <option value="极热">极热</option>
+      <option value="偏热">偏热</option>
+      <option value="中性">中性</option>
+      <option value="偏冷">偏冷</option>
+      <option value="极冷">极冷</option>
+    </select>
+    <select id="klineFilter" onchange="loadScan()">
+      <option value="全部">全部K线</option>
+      <option value="底部企稳">底部企稳</option>
+      <option value="底部突破">底部突破</option>
+      <option value="趋势主升">趋势主升</option>
+      <option value="趋势加速">趋势加速</option>
+    </select>
+    <select id="sortSelect" onchange="loadScan()">
+      <option value="tg_comp">按温度</option>
+      <option value="sharpe">按夏普</option>
+      <option value="me_20_ma10">按赚钱效应</option>
+      <option value="structure_ratio">按势能</option>
+      <option value="daily_return">按日涨幅</option>
+    </select>
+    <select id="sortOrder" onchange="loadScan()">
+      <option value="desc">降序</option>
+      <option value="asc">升序</option>
+    </select>
+    <button id="scanBtn" class="btn-primary" onclick="runScan()">运行扫描</button>
+  </div>
+
+  <div class="stats-row" id="statsRow"></div>
+  <div class="temp-bar" id="tempBar"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>行业</th>
+          <th>日涨幅</th>
+          <th>温度计</th>
+          <th>夏普</th>
+          <th>赚钱效应</th>
+          <th>势能</th>
+          <th>策略信号</th>
+          <th>K线状态</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">行业详情</h2>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="factor-grid" id="factorGrid"></div>
+    <div class="chart-area" id="chartArea"></div>
+  </div>
+</div>
+
+<script src="/static/plotly.min.js"></script>
+<script>
+let scanData = null;
+
+async function init() {
+  await loadStatus();
+  await loadDates();
+  await loadScan();
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/morphology/status');
+    const s = await res.json();
+    const el = document.getElementById('statusText');
+    if (s.calc_running) {
+      el.textContent = `扫描中... ${s.calc_message}`;
+      setTimeout(loadStatus, 2000);
+    } else {
+      el.textContent = s.has_data ? `数据截止 ${s.latest_date}` : '暂无数据';
+    }
+    document.getElementById('scanBtn').disabled = s.calc_running;
+  } catch(e) {}
+}
+
+async function loadDates() {
+  try {
+    const res = await fetch('/api/morphology/dates');
+    const dates = await res.json();
+    const sel = document.getElementById('dateSelect');
+    sel.innerHTML = dates.map(d => `<option value="${d}">${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadScan() {
+  const date = document.getElementById('dateSelect').value;
+  const signal = document.getElementById('signalFilter').value;
+  const tg = document.getElementById('tgFilter').value;
+  const kline = document.getElementById('klineFilter').value;
+  const sort = document.getElementById('sortSelect').value;
+  const sortOrder = document.getElementById('sortOrder').value;
+
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  if (signal !== '全部') params.set('signal', signal);
+  if (tg !== '全部') params.set('tg_label', tg);
+  if (kline !== '全部') params.set('kline', kline);
+  params.set('sort_by', sort);
+  params.set('sort_order', sortOrder);
+
+  try {
+    const res = await fetch('/api/morphology/scan?' + params);
+    if (!res.ok) { document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" class="loading">暂无数据，请先运行扫描</td></tr>'; return; }
+    scanData = await res.json();
+    renderStats();
+    renderTable();
+  } catch(e) {
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" class="loading">加载失败</td></tr>';
+  }
+}
+
+function renderStats() {
+  if (!scanData) return;
+  const d = scanData.industries;
+  const signalCount = d.filter(r => r.signals && r.signals !== '-').length;
+  const klineCount = d.filter(r => r.kline_states && r.kline_states !== '-').length;
+  const avgTg = d.reduce((s, r) => s + (r.tg_comp || 0), 0) / (d.length || 1);
+
+  const tempDist = {};
+  d.forEach(r => { if (r.tg_label) tempDist[r.tg_label] = (tempDist[r.tg_label] || 0) + 1; });
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="label">行业数</div><div class="value">${d.length}</div></div>
+    <div class="stat-card"><div class="label">策略信号</div><div class="value warm">${signalCount}</div></div>
+    <div class="stat-card"><div class="label">K线状态</div><div class="value" style="color:#38bdf8">${klineCount}</div></div>
+    <div class="stat-card"><div class="label">平均温度</div><div class="value ${avgTg >= 60 ? 'hot' : avgTg <= 30 ? 'cold' : ''}">${avgTg.toFixed(1)}</div></div>
+  `;
+
+  const labels = ['极热','偏热','中性','偏冷','极冷'];
+  const colors = {'极热':'#ef4444','偏热':'#f97316','中性':'#f59e0b','偏冷':'#38bdf8','极冷':'#3b82f6'};
+  document.getElementById('tempBar').innerHTML = labels.map(l =>
+    `<span class="temp-chip" style="border-color:${colors[l]}40">${l}<span class="cnt" style="color:${colors[l]}">${tempDist[l]||0}</span></span>`
+  ).join('');
+}
+
+function renderTable() {
+  if (!scanData) return;
+  const d = scanData.industries;
+
+  document.getElementById('tableBody').innerHTML = d.map(r => {
+    const hasSignal = r.signals && r.signals !== '-';
+    const tgColor = r.tg_comp >= 80 ? '#ef4444' : r.tg_comp >= 60 ? '#f97316' : r.tg_comp >= 40 ? '#f59e0b' : r.tg_comp >= 20 ? '#38bdf8' : '#3b82f6';
+
+    return `<tr class="${hasSignal ? 'has-signal' : ''}">
+      <td><a class="name-link" onclick="showDetail('${r.ts_code}','${r.name}')">${r.name}</a></td>
+      <td style="color:${r.daily_return >= 0 ? 'var(--red)' : 'var(--green)'}">${r.daily_return >= 0 ? '+' : ''}${(r.daily_return||0).toFixed(2)}%</td>
+      <td>
+        <span style="color:${tgColor}">${r.tg_comp != null ? r.tg_comp.toFixed(1) : '-'}</span>
+        <span class="tg-bar"><span class="tg-bar-fill" style="width:${r.tg_comp||0}%;background:${tgColor}"></span></span>
+        <span style="font-size:11px;color:var(--text2)">${r.tg_label||''}</span>
+      </td>
+      <td>${r.sharpe != null ? r.sharpe.toFixed(2) : '-'}</td>
+      <td>${r.me_20_ma10 != null ? r.me_20_ma10.toFixed(1) : '-'}</td>
+      <td>${r.structure_ratio != null ? r.structure_ratio.toFixed(1) : '-'}</td>
+      <td>${renderSignals(r.signals)}</td>
+      <td>${renderKlines(r.kline_states)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSignals(s) {
+  if (!s || s === '-') return '<span style="color:var(--text2)">-</span>';
+  const tags = s.split(' / ');
+  const classMap = {'赚钱效应优选':'me','牛回头':'bull','弱势反转':'weak','弱势反弹':'weak','黄金坑':'gold'};
+  return tags.map(t => `<span class="signal-tag ${classMap[t]||''}">${t}</span>`).join('');
+}
+
+function renderKlines(s) {
+  if (!s || s === '-') return '<span style="color:var(--text2)">-</span>';
+  const tags = s.split(' / ');
+  const classMap = {'底部企稳':'bottom','底部突破':'breakout','趋势主升':'uptrend','趋势加速':'accel'};
+  return tags.map(t => `<span class="kline-tag ${classMap[t]||''}">${t}</span>`).join('');
+}
+
+async function runScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.textContent = '扫描中...';
+  try {
+    const res = await fetch('/api/morphology/calculate', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      pollScanStatus();
+    } else {
+      alert(data.detail || '启动失败');
+      btn.disabled = false;
+      btn.textContent = '运行扫描';
+    }
+  } catch(e) {
+    alert('请求失败');
+    btn.disabled = false;
+    btn.textContent = '运行扫描';
+  }
+}
+
+async function pollScanStatus() {
+  try {
+    const res = await fetch('/api/morphology/status');
+    const s = await res.json();
+    const btn = document.getElementById('scanBtn');
+    document.getElementById('statusText').textContent = s.calc_message || '扫描中...';
+
+    if (s.calc_running) {
+      setTimeout(pollScanStatus, 2000);
+    } else {
+      btn.disabled = false;
+      btn.textContent = '运行扫描';
+      await loadDates();
+      await loadScan();
+      await loadStatus();
+    }
+  } catch(e) { setTimeout(pollScanStatus, 3000); }
+}
+
+async function showDetail(tsCode, name) {
+  document.getElementById('detailModal').classList.add('active');
+  document.getElementById('modalTitle').textContent = name + ' - 形态学详情';
+  document.getElementById('factorGrid').innerHTML = '<div class="loading">加载中...</div>';
+
+  // 获取当前选中日期的因子数据
+  try {
+    const date = document.getElementById('dateSelect').value || '';
+    const res = await fetch('/api/morphology/scan?date=' + date);
+    const data = await res.json();
+    const item = data.industries.find(r => r.ts_code === tsCode);
+    if (item) {
+      document.getElementById('factorGrid').innerHTML = `
+        <div class="factor-item"><div class="flabel">温度计 TG</div><div class="fval">${item.tg_comp != null ? item.tg_comp.toFixed(1) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">TG_High</div><div class="fval">${item.tg_high != null ? item.tg_high.toFixed(1) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">TG_Low</div><div class="fval">${item.tg_low != null ? item.tg_low.toFixed(1) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">TG_Ultra</div><div class="fval">${item.tg_ultra != null ? item.tg_ultra.toFixed(1) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">夏普比率</div><div class="fval">${item.sharpe != null ? item.sharpe.toFixed(3) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">ME_5</div><div class="fval">${item.me_5 != null ? item.me_5.toFixed(1) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">ME_20_MA10</div><div class="fval">${item.me_20_ma10 != null ? item.me_20_ma10.toFixed(1) : '-'}</div></div>
+        <div class="factor-item"><div class="flabel">结构势能</div><div class="fval">${item.structure_ratio != null ? item.structure_ratio.toFixed(1) : '-'}</div></div>
+      `;
+    }
+  } catch(e) {}
+
+  // 加载走势图（含所有历史数据）
+  try {
+    const res = await fetch(`/api/morphology/chart/${tsCode}`);
+    const html = await res.text();
+    document.getElementById('chartArea').innerHTML = html;
+  } catch(e) {
+    document.getElementById('chartArea').innerHTML = '<div class="loading">图表加载失败</div>';
+  }
+}
+
+function closeModal() {
+  document.getElementById('detailModal').classList.remove('active');
+}
+
+document.getElementById('detailModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+init();
+</script>
+</body>
+</html>

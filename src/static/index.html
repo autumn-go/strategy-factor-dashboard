@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>策略因子平台</title>
+<style>
+:root {
+  --bg: #0a0e17;
+  --bg2: #111827;
+  --bg3: #1a2234;
+  --border: #2a3548;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --accent: #3b82f6;
+  --accent2: #60a5fa;
+  --red: #ef4444;
+  --green: #22c55e;
+  --yellow: #f59e0b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh;
+}
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header h1 {
+  font-size: 20px; font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header .sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.status-bar {
+  display: flex; align-items: center; gap: 20px; font-size: 13px; color: var(--text2);
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  margin-right: 6px;
+}
+.status-dot.ok { background: var(--green); }
+.status-dot.running { background: var(--yellow); animation: pulse 1s infinite; }
+.status-dot.err { background: var(--red); }
+@keyframes pulse { 50% { opacity: 0.4; } }
+
+.container { padding: 30px 40px; max-width: 1200px; margin: 0 auto; }
+.section-title {
+  font-size: 16px; font-weight: 600; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::before {
+  content: ''; display: block; width: 3px; height: 18px;
+  background: var(--accent); border-radius: 2px;
+}
+
+.strategy-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px;
+}
+.strategy-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+  cursor: pointer; transition: all 0.2s;
+  text-decoration: none; color: inherit;
+}
+.strategy-card:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(59,130,246,0.15);
+}
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.card-title { font-size: 16px; font-weight: 600; }
+.card-tag {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(59,130,246,0.15); color: var(--accent2);
+}
+.card-desc { font-size: 13px; color: var(--text2); margin-top: 8px; line-height: 1.6; }
+.card-stats {
+  display: flex; gap: 20px; margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.stat-item { font-size: 12px; color: var(--text2); }
+.stat-item .val { font-size: 16px; font-weight: 600; color: var(--text); display: block; margin-top: 2px; }
+
+.empty-state {
+  text-align: center; padding: 80px 20px; color: var(--text2);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+.empty-state p { font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>策略因子平台</h1>
+    <div class="sub">量化因子研究与管理</div>
+  </div>
+  <div class="status-bar">
+    <span><span class="status-dot ok" id="statusDot"></span><span id="statusText">就绪</span></span>
+    <span id="dataInfo"></span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="section-title">因子策略列表</div>
+  <div class="strategy-grid" id="strategyGrid">
+    <a class="strategy-card" href="/factor/ews">
+      <div class="card-header">
+        <span class="card-title">EW-SDM 情绪加权扩散动量</span>
+        <span class="card-tag" id="ewsTag">未计算</span>
+      </div>
+      <div class="card-desc">
+        基于涨停情绪权重的概念/行业扩散动量因子。融合动量、情绪扩散与连板杠杆三因子，识别市场热点板块。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">交易日<span class="val" id="ewsDays">-</span></div>
+        <div class="stat-item">板块数<span class="val" id="ewsSectors">-</span></div>
+        <div class="stat-item">回测收益<span class="val" id="ewsReturn">-</span></div>
+      </div>
+    </a>
+    <a class="strategy-card" href="/rf">
+      <div class="card-header">
+        <span class="card-title">RF-EWSDM Range Filter 过滤</span>
+        <span class="card-tag" id="rfTag">未计算</span>
+      </div>
+      <div class="card-desc">
+        在 EW-SDM 策略基础上叠加 Range Filter 趋势过滤。上证指数处于 Buy 区间时操作，Sell 区间空仓等待，规避下跌趋势。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">Buy天数<span class="val" id="rfBuyDays">-</span></div>
+        <div class="stat-item">Sell天数<span class="val" id="rfSellDays">-</span></div>
+        <div class="stat-item">回测收益<span class="val" id="rfReturn">-</span></div>
+      </div>
+    </a>
+    <a class="strategy-card" href="/boci">
+      <div class="card-header">
+        <span class="card-title">BOCI 一级行业情绪指标</span>
+        <span class="card-tag" id="bociTag">未计算</span>
+      </div>
+      <div class="card-desc">
+        中银国际证券行业情绪指标体系。五因子等权合成综合情绪（MA20占比、RSI、换手率、涨跌停、成交额），五截面打分选行业，Top3等权持有。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">交易日<span class="val" id="bociDays">-</span></div>
+        <div class="stat-item">行业数<span class="val" id="bociIndustries">-</span></div>
+        <div class="stat-item">回测收益<span class="val" id="bociReturn">-</span></div>
+      </div>
+    </a>
+    <a class="strategy-card" href="/index-sentiment">
+      <div class="card-header">
+        <span class="card-title">宽基指数情绪指数</span>
+        <span class="card-tag" id="isTag">未计算</span>
+      </div>
+      <div class="card-desc">
+        上证指数、沪深300、中证1000、中证2000四宽基情绪指标。五因子等权合成（MA20占比、RSI、换手率、涨跌停、成交额），展示情绪时序图。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">交易日<span class="val" id="isDays">-</span></div>
+        <div class="stat-item">指数数<span class="val" id="isIndices">4</span></div>
+        <div class="stat-item">最新情绪<span class="val" id="isLatest">-</span></div>
+      </div>
+    </a>
+    <a class="strategy-card" href="/lc">
+      <div class="card-header">
+        <span class="card-title">流动性监测</span>
+        <span class="card-tag" id="lcTag">未计算</span>
+      </div>
+      <div class="card-desc">
+        Range Filter 趋势判断 + 双层入场策略（翻转入场/趋势确认入场），结合 WT/RSI/RSI9 多指标过滤，ATR 动态止盈止损，捕捉中证2000趋势行情。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">交易日<span class="val" id="lcDays">-</span></div>
+        <div class="stat-item">交易笔数<span class="val" id="lcTrades">-</span></div>
+        <div class="stat-item">回测收益<span class="val" id="lcReturn">-</span></div>
+      </div>
+    </a>
+    <a class="strategy-card" href="/morphology">
+      <div class="card-header">
+        <span class="card-title">形态学监控</span>
+        <span class="card-tag" id="morphTag">未扫描</span>
+      </div>
+      <div class="card-desc">
+        68个同花顺一级行业形态学因子监控。四因子（温度计、赚钱效应、个股势能、行业动量）+ 四策略信号 + 四K线状态，实时扫描板块机会。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">行业数<span class="val" id="morphTotal">-</span></div>
+        <div class="stat-item">策略信号<span class="val" id="morphSignals">-</span></div>
+        <div class="stat-item">最新温度<span class="val" id="morphTemp">-</span></div>
+      </div>
+    </a>
+    <a class="strategy-card" href="/crowdiness">
+      <div class="card-header">
+        <span class="card-title">行业拥挤度监测</span>
+        <span class="card-tag" id="crowdTag">未计算</span>
+      </div>
+      <div class="card-desc">
+        四维拥挤度指标体系：超额净值乖离率、超额动量、换手率均值、换手率乖离度。滚动1250日分位数+95%阈值打分，20日窗口高危判定，右侧逃顶风控。
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">行业数<span class="val" id="crowdIndustries">-</span></div>
+        <div class="stat-item">极度拥挤<span class="val" id="crowdDanger">-</span></div>
+        <div class="stat-item">最高得分<span class="val" id="crowdMaxScore">-</span></div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<script>
+async function refresh() {
+  try {
+    const res = await fetch('/api/status');
+    const s = await res.json();
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    if (s.calc_running) {
+      dot.className = 'status-dot running';
+      txt.textContent = `计算中 ${s.calc_progress}/${s.calc_total}`;
+    } else {
+      dot.className = 'status-dot ok';
+      txt.textContent = '就绪';
+    }
+    document.getElementById('dataInfo').textContent =
+      s.has_data ? `数据: ${s.min_date} ~ ${s.max_date}` : '';
+
+    if (s.has_data) {
+      document.getElementById('ewsTag').textContent = '已就绪';
+      document.getElementById('ewsTag').style.background = 'rgba(34,197,94,0.15)';
+      document.getElementById('ewsTag').style.color = '#22c55e';
+      document.getElementById('ewsDays').textContent = s.trade_days;
+      document.getElementById('ewsSectors').textContent = (s.concepts||0) + '+' + (s.industries||0);
+    }
+    // 获取回测收益
+    try {
+      const bt = await fetch('/api/ews/backtest');
+      if (bt.ok) {
+        const data = await bt.json();
+        if (data.length > 0) {
+          const last = data[data.length - 1].cum_return;
+          const pct = ((last - 1) * 100).toFixed(2);
+          const el = document.getElementById('ewsReturn');
+          el.textContent = (last >= 1 ? '+' : '') + pct + '%';
+          el.style.color = last >= 1 ? 'var(--green)' : 'var(--red)';
+        }
+      }
+    } catch(e) {}
+    // 获取 RF-EWSDM 状态
+    try {
+      const rfS = await fetch('/api/rf/status');
+      if (rfS.ok) {
+        const rf = await rfS.json();
+        if (rf.has_data) {
+          document.getElementById('rfTag').textContent = '已就绪';
+          document.getElementById('rfTag').style.background = 'rgba(34,197,94,0.15)';
+          document.getElementById('rfTag').style.color = '#22c55e';
+          document.getElementById('rfBuyDays').textContent = rf.buy_days;
+          document.getElementById('rfSellDays').textContent = rf.sell_days;
+          const rfBt = await fetch('/api/rf/backtest');
+          if (rfBt.ok) {
+            const rfData = await rfBt.json();
+            if (rfData.length > 0) {
+              const last = rfData[rfData.length - 1].cum_return;
+              const pct = ((last - 1) * 100).toFixed(2);
+              const el = document.getElementById('rfReturn');
+              el.textContent = (last >= 1 ? '+' : '') + pct + '%';
+              el.style.color = last >= 1 ? 'var(--green)' : 'var(--red)';
+            }
+          }
+        }
+      }
+    } catch(e) {}
+
+    // 获取 BOCI 状态
+    try {
+      const bociS = await fetch('/api/boci/status');
+      if (bociS.ok) {
+        const boci = await bociS.json();
+        if (boci.has_data) {
+          document.getElementById('bociTag').textContent = '已就绪';
+          document.getElementById('bociTag').style.background = 'rgba(34,197,94,0.15)';
+          document.getElementById('bociTag').style.color = '#22c55e';
+          document.getElementById('bociDays').textContent = boci.trade_days;
+          document.getElementById('bociIndustries').textContent = '68';
+          const bociBt = await fetch('/api/boci/backtest');
+          if (bociBt.ok) {
+            const bociData = await bociBt.json();
+            if (bociData.length > 0) {
+              const last = bociData[bociData.length - 1].cum_return;
+              const pct = ((last - 1) * 100).toFixed(2);
+              const el = document.getElementById('bociReturn');
+              el.textContent = (last >= 1 ? '+' : '') + pct + '%';
+              el.style.color = last >= 1 ? 'var(--green)' : 'var(--red)';
+            }
+          }
+        }
+        if (boci.calc_running) {
+          document.getElementById('bociTag').textContent = '计算中';
+          document.getElementById('bociTag').style.background = 'rgba(245,158,11,0.15)';
+          document.getElementById('bociTag').style.color = '#f59e0b';
+        }
+      }
+    } catch(e) {}
+
+    // 获取宽基指数情绪状态
+    let isCalcRunning = false;
+    try {
+      const isS = await fetch('/api/index-sentiment/status');
+      if (isS.ok) {
+        const isData = await isS.json();
+        if (isData.has_data) {
+          document.getElementById('isTag').textContent = '已就绪';
+          document.getElementById('isTag').style.background = 'rgba(34,197,94,0.15)';
+          document.getElementById('isTag').style.color = '#22c55e';
+          document.getElementById('isDays').textContent = isData.trade_days;
+          // 显示上证指数最新情绪
+          if (isData.latest_values && isData.latest_values['000001.SH']) {
+            const v = isData.latest_values['000001.SH'].sentiment;
+            const el = document.getElementById('isLatest');
+            el.textContent = v.toFixed(4);
+            el.style.color = v >= 0.5 ? 'var(--green)' : 'var(--red)';
+          }
+        }
+        if (isData.calc_running) {
+          document.getElementById('isTag').textContent = '计算中';
+          document.getElementById('isTag').style.background = 'rgba(245,158,11,0.15)';
+          document.getElementById('isTag').style.color = '#f59e0b';
+          isCalcRunning = true;
+        }
+      }
+    } catch(e) {}
+
+    // 获取流动性监测(LC)状态
+    let lcCalcRunning = false;
+    try {
+      const lcS = await fetch('/api/lc/status');
+      if (lcS.ok) {
+        const lcData = await lcS.json();
+        if (lcData.has_data) {
+          document.getElementById('lcTag').textContent = '已就绪';
+          document.getElementById('lcTag').style.background = 'rgba(34,197,94,0.15)';
+          document.getElementById('lcTag').style.color = '#22c55e';
+          document.getElementById('lcDays').textContent = lcData.total_days;
+          document.getElementById('lcTrades').textContent = lcData.n_trades + '笔(' + lcData.trade_win_rate + '%)';
+          // 获取回测收益
+          const lcBt = await fetch('/api/lc/backtest');
+          if (lcBt.ok) {
+            const lcBtData = await lcBt.json();
+            if (lcBtData.length > 0) {
+              const last = lcBtData[lcBtData.length - 1].cum_return;
+              const pct = ((last - 1) * 100).toFixed(2);
+              const el = document.getElementById('lcReturn');
+              el.textContent = (last >= 1 ? '+' : '') + pct + '%';
+              el.style.color = last >= 1 ? 'var(--green)' : 'var(--red)';
+            }
+          }
+        }
+        if (lcData.calc_running) {
+          document.getElementById('lcTag').textContent = '计算中';
+          document.getElementById('lcTag').style.background = 'rgba(245,158,11,0.15)';
+          document.getElementById('lcTag').style.color = '#f59e0b';
+          lcCalcRunning = true;
+        }
+      }
+    } catch(e) {}
+
+    if (s.calc_running || isCalcRunning || lcCalcRunning) setTimeout(refresh, 2000);
+
+    // 获取形态学监控状态
+    try {
+      const morphS = await fetch('/api/morphology/status');
+      if (morphS.ok) {
+        const morph = await morphS.json();
+        if (morph.has_data) {
+          document.getElementById('morphTag').textContent = '已就绪';
+          document.getElementById('morphTag').style.background = 'rgba(34,197,94,0.15)';
+          document.getElementById('morphTag').style.color = '#22c55e';
+          document.getElementById('morphTotal').textContent = morph.total_records;
+          document.getElementById('morphSignals').textContent = morph.signal_count;
+          // 平均温度
+          const tempEl = document.getElementById('morphTemp');
+          const avgTg = morph.temp_dist && Object.keys(morph.temp_dist).length > 0
+            ? Object.entries(morph.temp_dist).reduce((sum, [k,v]) => {
+                const avg = {'极热':90,'偏热':70,'中性':50,'偏冷':30,'极冷':10};
+                return sum + (avg[k]||50) * v;
+              }, 0) / (morph.total_records || 1) : null;
+          if (avgTg !== null) {
+            tempEl.textContent = avgTg.toFixed(0);
+            tempEl.style.color = avgTg >= 60 ? 'var(--red)' : avgTg <= 30 ? '#38bdf8' : 'var(--text)';
+          }
+        }
+        if (morph.calc_running) {
+          document.getElementById('morphTag').textContent = '扫描中';
+          document.getElementById('morphTag').style.background = 'rgba(245,158,11,0.15)';
+          document.getElementById('morphTag').style.color = '#f59e0b';
+        }
+      }
+    } catch(e) {}
+
+    // 获取拥挤度监测状态
+    try {
+      const crowdS = await fetch('/api/crowdiness/status');
+      if (crowdS.ok) {
+        const crowd = await crowdS.json();
+        if (crowd.has_data) {
+          document.getElementById('crowdTag').textContent = '已就绪';
+          document.getElementById('crowdTag').style.background = 'rgba(34,197,94,0.15)';
+          document.getElementById('crowdTag').style.color = '#22c55e';
+          const dist = crowd.score_dist || {};
+          const totalInd = Object.values(dist).reduce((a,b) => a+b, 0);
+          document.getElementById('crowdIndustries').textContent = totalInd;
+          const alertDist = crowd.alert_dist || {};
+          document.getElementById('crowdDanger').textContent = (alertDist['2'] || 0);
+          document.getElementById('crowdDanger').style.color = (alertDist['2']||0) > 0 ? 'var(--red)' : 'var(--text)';
+          const scores = Object.keys(dist).map(Number);
+          const maxS = scores.length > 0 ? Math.max(...scores) : '-';
+          const maxEl = document.getElementById('crowdMaxScore');
+          maxEl.textContent = maxS;
+          maxEl.style.color = maxS >= 3 ? 'var(--red)' : maxS >= 1 ? 'var(--yellow)' : 'var(--text)';
+        }
+        if (crowd.calc_running) {
+          document.getElementById('crowdTag').textContent = '计算中';
+          document.getElementById('crowdTag').style.background = 'rgba(245,158,11,0.15)';
+          document.getElementById('crowdTag').style.color = '#f59e0b';
+        }
+      }
+    } catch(e) {}
+  } catch(e) {
+    console.error(e);
+  }
+}
+refresh();
+</script>
+</body>
+</html>

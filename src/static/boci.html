@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOCI 一级行业情绪指标</title>
+<style>
+:root {
+  --bg: #0a0e17; --bg2: #111827; --bg3: #1a2234;
+  --border: #2a3548; --text: #e2e8f0; --text2: #94a3b8;
+  --accent: #3b82f6; --accent2: #60a5fa;
+  --red: #ef4444; --green: #22c55e; --yellow: #f59e0b; --orange: #f97316; --purple: #a78bfa;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+
+.header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 16px 40px; display: flex; align-items: center; gap: 16px;
+}
+.header a { color: var(--text2); text-decoration: none; font-size: 14px; transition: color 0.2s; }
+.header a:hover { color: var(--text); }
+.header a + a::before { content: '/'; margin-right: 12px; color: var(--border); }
+.header .current { color: var(--text); font-weight: 500; }
+
+.toolbar {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 12px 40px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.btn {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-size: 13px;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent2); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.status-bar {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 8px 40px; font-size: 12px; color: var(--text2);
+  display: flex; align-items: center; gap: 16px;
+}
+.status-bar .tag {
+  padding: 2px 8px; border-radius: 4px; font-size: 11px;
+}
+.status-bar .tag.running { background: var(--accent); color: #fff; }
+.status-bar .tag.idle { background: var(--bg3); color: var(--text2); }
+
+.main {
+  display: flex; height: calc(100vh - 140px);
+}
+.ranking-panel {
+  width: 520px; min-width: 420px; border-right: 1px solid var(--border);
+  overflow-y: auto; background: var(--bg);
+}
+.chart-panel {
+  flex: 1; overflow-y: auto; background: var(--bg);
+}
+
+/* 日期选择器 */
+.date-picker {
+  display: flex; align-items: center; gap: 8px;
+}
+.date-input {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-size: 13px; width: 110px;
+}
+
+/* 排名表格 */
+.ranking-header {
+  display: grid; grid-template-columns: 40px 1fr 80px 80px 80px;
+  padding: 8px 16px; background: var(--bg2); border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--text2); font-weight: 500; text-transform: uppercase;
+  position: sticky; top: 0; z-index: 10;
+}
+.ranking-row {
+  display: grid; grid-template-columns: 40px 1fr 80px 80px 80px;
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+  font-size: 13px; cursor: pointer; transition: background 0.15s;
+}
+.ranking-row:hover { background: var(--bg3); }
+.ranking-row.selected { background: rgba(59,130,246,0.15); border-left: 3px solid var(--accent); }
+.ranking-row.overheat { background: rgba(239,68,68,0.08); }
+.rank-num { font-weight: 700; color: var(--accent); font-size: 14px; }
+.rank-num.top3 { color: var(--yellow); }
+.ind-name { font-weight: 500; }
+.sentiment-val { color: var(--accent); font-family: monospace; }
+.score-val { font-family: monospace; font-weight: 600; }
+.overheat-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 3px;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 600;
+  margin-left: 4px;
+}
+
+/* 侧边详情 */
+.detail-sidebar {
+  position: fixed; right: -420px; top: 0; width: 420px; height: 100vh;
+  background: var(--bg2); border-left: 1px solid var(--border);
+  z-index: 100; transition: right 0.3s; overflow-y: auto; padding: 20px;
+}
+.detail-sidebar.open { right: 0; }
+.detail-sidebar h3 { font-size: 16px; margin-bottom: 16px; }
+.detail-sidebar .close-btn {
+  position: absolute; top: 12px; right: 12px; cursor: pointer;
+  font-size: 20px; color: var(--text2);
+}
+
+/* 指标卡片 */
+.indicator-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;
+}
+.indicator-card {
+  padding: 10px; border-radius: 8px; background: var(--bg3); border: 1px solid var(--border);
+}
+.indicator-card .label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+.indicator-card .value { font-size: 18px; font-weight: 700; font-family: monospace; }
+
+/* 进度条 */
+.progress-bar {
+  width: 200px; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s;
+}
+
+/* 回测统计 */
+.bt-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  padding: 16px 40px; background: var(--bg2); border-bottom: 1px solid var(--border);
+}
+.stat-item {
+  text-align: center;
+}
+.stat-item .label { font-size: 11px; color: var(--text2); margin-bottom: 2px; }
+.stat-item .value { font-size: 20px; font-weight: 700; font-family: monospace; }
+.stat-item .value.positive { color: var(--red); }
+.stat-item .value.negative { color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/">策略因子平台</a>
+  <a href="/factor/ews">EW-SDM</a>
+  <a href="/rf">RF-EWSDM</a>
+  <a class="current">BOCI 行业情绪</a>
+</div>
+
+<div class="toolbar">
+  <button class="btn primary" id="btn-calc" onclick="startCalc()">全量计算</button>
+  <button class="btn" id="btn-refresh" onclick="startRefresh()" style="border-color:var(--green);color:var(--green)">增量刷新</button>
+  <div class="date-picker">
+    <span style="color:var(--text2);font-size:13px">日期:</span>
+    <input type="date" class="date-input" id="date-input" onchange="loadRanking()">
+  </div>
+  <button class="btn" onclick="prevDate()">&#9664;</button>
+  <button class="btn" onclick="nextDate()">&#9654;</button>
+  <div style="flex:1"></div>
+  <span id="info-text" style="color:var(--text2);font-size:12px"></span>
+</div>
+
+<div class="status-bar" id="status-bar">
+  <span class="tag idle" id="status-tag">待命</span>
+  <span id="status-msg">加载中...</span>
+  <div class="progress-bar" id="progress-bar" style="display:none">
+    <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="ranking-panel" id="ranking-panel">
+    <div class="ranking-header">
+      <span>#</span><span>行业</span><span>情绪</span><span>打分</span><span>排名</span>
+    </div>
+    <div id="ranking-list"></div>
+  </div>
+  <div class="chart-panel">
+    <div style="padding:12px 16px; font-size:13px; color:var(--text2); border-bottom:1px solid var(--border);">
+      <b style="color:var(--text)">BOCI Top3 回测净值</b> — 每10日调仓，68个同花顺一级行业
+    </div>
+    <iframe id="backtest-chart" style="width:100%;height:380px;border:none;"></iframe>
+    <div id="sub-charts" style="display:none">
+      <div style="padding:8px 16px; font-size:13px; color:var(--text2); border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+        <b style="color:var(--text)" id="detail-title">行业情绪详情</b>
+      </div>
+      <iframe id="sentiment-chart" style="width:100%;height:320px;border:none;"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- 侧边详情 -->
+<div class="detail-sidebar" id="detail-sidebar">
+  <span class="close-btn" onclick="closeSidebar()">&times;</span>
+  <h3 id="detail-name"></h3>
+  <div class="indicator-grid" id="detail-indicators"></div>
+  <div style="margin-top:12px;">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">截面因子</div>
+    <div id="detail-factors"></div>
+  </div>
+</div>
+
+<script>
+let dates = [];
+let currentDate = '';
+let selectedIndustry = '';
+
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// 加载状态
+async function loadStatus() {
+  try {
+    const st = await api('/api/boci/status');
+    const tag = document.getElementById('status-tag');
+    const msg = document.getElementById('status-msg');
+
+    if (st.calc_running) {
+      tag.className = 'tag running';
+      tag.textContent = '计算中';
+      msg.textContent = st.calc_message || '...';
+      document.getElementById('progress-bar').style.display = '';
+      const pct = st.calc_total > 0 ? (st.calc_progress / st.calc_total * 100) : 0;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('btn-calc').disabled = true;
+      document.getElementById('btn-refresh').disabled = true;
+      setTimeout(loadStatus, 2000);
+    } else {
+      tag.className = 'tag idle';
+      tag.textContent = '待命';
+      document.getElementById('progress-bar').style.display = 'none';
+      document.getElementById('btn-calc').disabled = false;
+      document.getElementById('btn-refresh').disabled = false;
+
+      if (st.has_data) {
+        msg.textContent = `数据: ${st.trade_days}天 | ${st.min_date}~${st.max_date} | ${st.total_records}条`;
+        if (st.latest_top3 && st.latest_top3.length > 0) {
+          const topNames = st.latest_top3.map(r => r.industry_name).join(', ');
+          document.getElementById('info-text').textContent = `最新Top3: ${topNames}`;
+        }
+      } else {
+        msg.textContent = '暂无数据，请先点击"全量计算"';
+      }
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// 加载日期列表
+async function loadDates() {
+  try {
+    dates = await api('/api/boci/dates');
+    if (dates.length > 0) {
+      currentDate = dates[0]; // 最新日期
+      const d = currentDate;
+      document.getElementById('date-input').value = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+      loadRanking();
+    }
+  } catch(e) {
+    console.error('加载日期失败', e);
+  }
+}
+
+function prevDate() {
+  const idx = dates.indexOf(currentDate);
+  if (idx < dates.length - 1) {
+    currentDate = dates[idx + 1];
+    const d = currentDate;
+    document.getElementById('date-input').value = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+    loadRanking();
+  }
+}
+
+function nextDate() {
+  const idx = dates.indexOf(currentDate);
+  if (idx > 0) {
+    currentDate = dates[idx - 1];
+    const d = currentDate;
+    document.getElementById('date-input').value = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+    loadRanking();
+  }
+}
+
+// 加载排名
+async function loadRanking() {
+  if (!currentDate) return;
+  try {
+    const data = await api(`/api/boci/ranking?date=${currentDate}`);
+    const list = document.getElementById('ranking-list');
+    list.innerHTML = '';
+
+    data.forEach((row, i) => {
+      const isTop3 = i < 3;
+      const isOverheat = row.sentiment > 0.85;
+      const cls = (isOverheat ? 'overheat ' : '') + (row.industry_code === selectedIndustry ? 'selected' : '');
+
+      const div = document.createElement('div');
+      div.className = `ranking-row ${cls}`;
+      div.innerHTML = `
+        <span class="rank-num ${isTop3 ? 'top3' : ''}">${i+1}</span>
+        <span class="ind-name">${row.industry_name || row.industry_code}${isOverheat ? '<span class="overheat-badge">过热</span>' : ''}</span>
+        <span class="sentiment-val">${row.sentiment != null ? row.sentiment.toFixed(4) : '-'}</span>
+        <span class="score-val" style="color:${row.final_score < 0 ? 'var(--red)' : 'var(--green)'}">${row.final_score != null ? row.final_score.toFixed(4) : '-'}</span>
+        <span style="color:var(--text2);font-size:12px">#${i+1}/68</span>
+      `;
+      div.onclick = () => showDetail(row);
+      list.appendChild(div);
+    });
+  } catch(e) {
+    console.error('加载排名失败', e);
+  }
+}
+
+// 显示行业详情
+async function showDetail(row) {
+  selectedIndustry = row.industry_code;
+  loadRanking(); // 刷新选中状态
+
+  const sidebar = document.getElementById('detail-sidebar');
+  document.getElementById('detail-name').textContent = row.industry_name || row.industry_code;
+
+  // 指标卡片
+  const indicators = document.getElementById('detail-indicators');
+  const fields = [
+    { key: 'f1_ma20_ratio', label: 'F1: MA20占比', color: 'var(--green)' },
+    { key: 'f2_rsi_norm', label: 'F2: RSI', color: 'var(--yellow)' },
+    { key: 'f3_turnover_strength', label: 'F3: 换手率', color: 'var(--purple)' },
+    { key: 'f4_limit_diff', label: 'F4: 涨跌停', color: 'var(--red)' },
+    { key: 'f5_amount_ratio', label: 'F5: 成交额占比', color: 'var(--orange)' },
+    { key: 'sentiment', label: '综合情绪', color: 'var(--accent)' },
+  ];
+  indicators.innerHTML = fields.map(f => `
+    <div class="indicator-card">
+      <div class="label">${f.label}</div>
+      <div class="value" style="color:${f.color}">${row[f.key] != null ? row[f.key].toFixed(4) : '-'}</div>
+    </div>
+  `).join('');
+
+  // 截面因子
+  const factors = document.getElementById('detail-factors');
+  const scoreFields = [
+    { key: 'rank_s1', label: 'S1: 情绪斜率(35%)', w: '35%' },
+    { key: 'rank_s2', label: 'S2: 加速度(15%)', w: '15%' },
+    { key: 'rank_s3', label: 'S3: 相对水平(30%)', w: '30%' },
+    { key: 'rank_s4', label: 'S4: 价格动量(10%)', w: '10%' },
+    { key: 'rank_s5', label: 'S5: 价格斜率(10%)', w: '10%' },
+  ];
+  factors.innerHTML = scoreFields.map(f => {
+    const val = row[f.key];
+    const pct = val != null ? (val * 100).toFixed(1) : '-';
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="color:var(--text2)">${f.label}</span>
+      <span style="font-family:monospace;color:var(--accent)">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  sidebar.classList.add('open');
+
+  // 加载情绪时序图
+  document.getElementById('detail-title').textContent = `${row.industry_name} 情绪时序`;
+  document.getElementById('sub-charts').style.display = '';
+  document.getElementById('sentiment-chart').src = `/api/boci/chart/sentiment/${row.industry_code}`;
+}
+
+function closeSidebar() {
+  document.getElementById('detail-sidebar').classList.remove('open');
+  selectedIndustry = '';
+  loadRanking();
+}
+
+// 开始计算
+async function startCalc() {
+  try {
+    const r = await fetch('/api/boci/calculate', { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    document.getElementById('btn-calc').disabled = true;
+    document.getElementById('btn-refresh').disabled = true;
+    loadStatus();
+    const check = setInterval(async () => {
+      const st = await api('/api/boci/status');
+      if (!st.calc_running) {
+        clearInterval(check);
+        loadStatus();
+        loadDates();
+        loadBacktestChart();
+      }
+    }, 3000);
+  } catch(e) {
+    alert('启动失败: ' + e.message);
+  }
+}
+
+// 增量刷新
+async function startRefresh() {
+  try {
+    const r = await fetch('/api/boci/refresh', { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    const msg = await r.json();
+    document.getElementById('btn-calc').disabled = true;
+    document.getElementById('btn-refresh').disabled = true;
+    loadStatus();
+    const check = setInterval(async () => {
+      const st = await api('/api/boci/status');
+      if (!st.calc_running) {
+        clearInterval(check);
+        loadStatus();
+        loadDates();
+        loadBacktestChart();
+      }
+    }, 3000);
+  } catch(e) {
+    alert('刷新失败: ' + e.message);
+  }
+}
+
+// 加载回测图表
+function loadBacktestChart() {
+  document.getElementById('backtest-chart').src = '/api/boci/chart/backtest';
+}
+
+// 初始化
+loadStatus();
+loadDates();
+loadBacktestChart();
+</script>
+</body>
+</html>

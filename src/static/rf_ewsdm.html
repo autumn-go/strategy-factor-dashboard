@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RF-EWSDM Range Filter 趋势过滤 EW-SDM</title>
+<style>
+:root {
+  --bg: #0a0e17; --bg2: #111827; --bg3: #1a2234;
+  --border: #2a3548; --text: #e2e8f0; --text2: #94a3b8;
+  --accent: #22c55e; --accent2: #4ade80;
+  --red: #ef4444; --green: #22c55e; --yellow: #f59e0b; --orange: #f97316; --purple: #a78bfa;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+
+.header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 16px 40px; display: flex; align-items: center; gap: 16px;
+}
+.header a { color: var(--text2); text-decoration: none; font-size: 14px; transition: color 0.2s; }
+.header a:hover { color: var(--text); }
+.header a + a::before { content: '/'; margin-right: 12px; color: var(--border); }
+.header .current { color: var(--text); font-weight: 500; }
+
+.toolbar {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 12px 40px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.btn {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-size: 13px;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent2); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.select {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-size: 13px;
+}
+.sector-tabs { display: flex; gap: 0; }
+.sector-tab {
+  padding: 5px 14px; font-size: 13px; color: var(--text2);
+  cursor: pointer; border: 1px solid var(--border); transition: all 0.2s;
+}
+.sector-tab:first-child { border-radius: 6px 0 0 6px; }
+.sector-tab:last-child { border-radius: 0 6px 6px 0; }
+.sector-tab:not(:first-child) { border-left: none; }
+.sector-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.calc-status { margin-left: auto; font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 8px; }
+.progress-bar { width: 200px; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; display: none; }
+.progress-bar .fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
+
+.container { padding: 24px 40px; max-width: 1400px; margin: 0 auto; }
+
+/* RF 信号概况 */
+.rf-summary {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; margin-bottom: 24px; display: flex; gap: 32px; align-items: center; flex-wrap: wrap;
+}
+.rf-param { font-size: 13px; color: var(--text2); }
+.rf-param span { color: var(--text); font-weight: 600; }
+.rf-signal-info { display: flex; gap: 24px; }
+.signal-badge { padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.signal-badge.buy { background: rgba(34,197,94,0.15); color: var(--green); }
+.signal-badge.sell { background: rgba(239,68,68,0.15); color: var(--red); }
+
+/* 回测区域 */
+.backtest-section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+.backtest-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.backtest-stats { display: flex; gap: 24px; }
+.bt-stat { text-align: center; }
+.bt-stat .label { font-size: 11px; color: var(--text2); }
+.bt-stat .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.chart-frame { width: 100%; height: 400px; border: none; border-radius: 8px; }
+
+/* 区间涨幅 */
+.period-section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; }
+.period-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.period-row label { font-size: 13px; color: var(--text2); white-space: nowrap; }
+.period-row input[type="date"] { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 13px; }
+.period-row input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+.period-result { display: none; margin-top: 12px; padding: 12px 16px; background: var(--bg3); border-radius: 8px; }
+.period-result.show { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+.pr-item { text-align: center; }
+.pr-item .label { font-size: 11px; color: var(--text2); }
+.pr-item .value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.pr-item .value.positive { color: var(--red); }
+.pr-item .value.negative { color: var(--green); }
+
+/* Tab */
+.tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab { padding: 10px 20px; font-size: 13px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* 表格 */
+.ranking-section { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: var(--bg3); padding: 10px 14px; text-align: left; font-weight: 500; color: var(--text2); font-size: 12px; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+td { padding: 10px 14px; border-top: 1px solid var(--border); white-space: nowrap; }
+tr:hover td { background: rgba(34,197,94,0.05); }
+.rank { width: 40px; text-align: center; font-weight: 600; }
+.rank.top1 { color: #fbbf24; } .rank.top2 { color: #d1d5db; } .rank.top3 { color: #d97706; }
+.score { font-weight: 700; font-size: 14px; }
+.score.positive { color: var(--green); } .score.negative { color: var(--red); }
+.momentum.positive { color: var(--red); } .momentum.negative { color: var(--green); }
+.type-tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+.type-tag.concept { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.type-tag.industry { background: rgba(167,139,250,0.15); color: var(--purple); }
+.rf-tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+.rf-tag.buy { background: rgba(34,197,94,0.15); color: var(--green); }
+.rf-tag.sell { background: rgba(239,68,68,0.15); color: var(--red); }
+
+/* 侧边详情面板 */
+.detail-panel { display: none; position: fixed; right: 0; top: 0; bottom: 0; width: 440px; background: var(--bg2); border-left: 1px solid var(--border); z-index: 100; overflow-y: auto; padding: 24px; }
+.detail-panel.show { display: block; animation: slideIn 0.2s; }
+@keyframes slideIn { from { transform: translateX(100%); } }
+.detail-close { float: right; background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; padding: 4px 8px; }
+.detail-close:hover { color: var(--text); }
+.detail-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.detail-code { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+.detail-chart-frame { width: 100%; height: 280px; border: none; border-radius: 8px; margin-bottom: 20px; }
+.detail-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ds-item { background: var(--bg3); border-radius: 8px; padding: 12px; }
+.ds-item .label { font-size: 11px; color: var(--text2); }
+.ds-item .value { font-size: 18px; font-weight: 600; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/">策略因子平台</a>
+  <a href="/factor/ews">EW-SDM</a>
+  <span class="current">RF-EWSDM Range Filter 过滤</span>
+</div>
+
+<div class="toolbar">
+  <div class="sector-tabs">
+    <div class="sector-tab active" data-type="all" onclick="switchSector(this)">全部</div>
+    <div class="sector-tab" data-type="concept" onclick="switchSector(this)">概念</div>
+    <div class="sector-tab" data-type="industry" onclick="switchSector(this)">行业</div>
+  </div>
+  <select class="select" id="dateSelect" style="min-width:160px"><option value="">选择日期...</option></select>
+  <button class="btn primary" id="calcBtn" onclick="startCalc()">计算 RF-EWSDM</button>
+  <button class="btn" id="refreshBtn" onclick="startRefresh()" style="background:#059669;border-color:#059669;color:#fff;font-weight:600">刷新数据</button>
+  <button class="btn" onclick="refresh()">刷新页面</button>
+  <div class="calc-status" id="calcStatus" style="display:none">
+    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+    <span id="progressText"></span>
+  </div>
+</div>
+
+<div class="container">
+  <!-- RF 信号概况 -->
+  <div class="rf-summary">
+    <div class="rf-param">Range Filter: <span>Period=8, Multiplier=3</span></div>
+    <div class="rf-param">标的: <span>上证指数 (000001.SH)</span></div>
+    <div class="rf-signal-info">
+      <div class="signal-badge buy" id="buyCount">Buy: -</div>
+      <div class="signal-badge sell" id="sellCount">Sell: -</div>
+    </div>
+    <div class="rf-param">当前信号: <span id="currentSignal">-</span></div>
+  </div>
+
+  <!-- 回测区域 -->
+  <div class="backtest-section">
+    <div class="backtest-header">
+      <span style="font-weight:600">RF-EWSDM Top10 等权回测净值</span>
+      <div class="backtest-stats" id="btStats">
+        <div class="bt-stat"><div class="label">累计收益</div><div class="value" id="btReturn">-</div></div>
+        <div class="bt-stat"><div class="label">最大回撤</div><div class="value" id="btDrawdown">-</div></div>
+        <div class="bt-stat"><div class="label">胜率</div><div class="value" id="btWinRate">-</div></div>
+        <div class="bt-stat"><div class="label">Buy 占比</div><div class="value" id="btBuyPct">-</div></div>
+        <div class="bt-stat"><div class="label">日均收益</div><div class="value" id="btAvgReturn">-</div></div>
+      </div>
+    </div>
+    <iframe id="backtestChartFrame" class="chart-frame" src="about:blank"></iframe>
+  </div>
+
+  <!-- 区间涨幅 -->
+  <div class="period-section">
+    <div class="period-row">
+      <label>区间涨幅</label>
+      <input type="date" id="periodStart">
+      <span style="color:var(--text2);font-size:13px">至</span>
+      <input type="date" id="periodEnd">
+      <button class="btn primary sm" onclick="queryPeriodReturn()">查询</button>
+      <button class="btn sm" onclick="clearPeriodReturn()">清除</button>
+    </div>
+    <div class="period-result" id="periodResult"></div>
+  </div>
+
+  <!-- Tab -->
+  <div class="tabs">
+    <div class="tab active" data-tab="ranking" onclick="switchTab(this)">因子榜单</div>
+    <div class="tab" data-tab="history" onclick="switchTab(this)">板块历史</div>
+  </div>
+
+  <!-- 榜单 -->
+  <div id="tabRanking">
+    <div class="ranking-section">
+      <div class="table-wrap" style="max-height:600px;overflow-y:auto">
+        <table>
+          <thead>
+            <tr>
+              <th class="rank">排名</th>
+              <th>RF信号</th>
+              <th>类型</th>
+              <th>板块名称</th>
+              <th>EW-SDM</th>
+              <th>Momentum</th>
+              <th>Emotion</th>
+              <th>S-Score</th>
+              <th>涨停</th>
+              <th>炸板</th>
+              <th>最高连板</th>
+              <th>上涨/总数</th>
+            </tr>
+          </thead>
+          <tbody id="rankingBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 历史Tab -->
+  <div id="tabHistory" style="display:none">
+    <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+      <span style="font-size:13px;color:var(--text2)">选择板块：</span>
+      <select class="select" id="conceptSelect" style="min-width:200px"><option value="">选择...</option></select>
+    </div>
+    <div class="ranking-section">
+      <div class="table-wrap" style="max-height:500px;overflow-y:auto">
+        <table>
+          <thead><tr><th>日期</th><th>RF</th><th>EW-SDM</th><th>Momentum</th><th>Emotion</th><th>S-Score</th><th>涨停</th><th>炸板</th><th>最高连板</th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 侧边详情 -->
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" onclick="closeDetail()">&times;</button>
+  <div class="detail-name" id="detailName"></div>
+  <div class="detail-code" id="detailCode"></div>
+  <iframe id="detailChartFrame" class="detail-chart-frame" src="about:blank"></iframe>
+  <div class="detail-stats" id="detailStats"></div>
+</div>
+
+<script>
+const API = '';
+let allRanking = [];
+let currentSector = 'all';
+let rfSignalMap = {};
+
+// ==================== 板块类型切换 ====================
+function switchSector(el) {
+  document.querySelectorAll('.sector-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentSector = el.dataset.type;
+  loadBacktest();
+  loadRanking();
+}
+
+// ==================== 初始化 ====================
+async function init() {
+  await loadRFStatus();
+  await loadDates();
+  await loadBacktest();
+  const sel = document.getElementById('dateSelect');
+  if (sel.options.length > 1) { sel.selectedIndex = 1; loadRanking(); }
+  pollStatus();
+}
+
+async function loadRFStatus() {
+  try {
+    const res = await fetch(`${API}/api/rf/status`);
+    const s = await res.json();
+    document.getElementById('buyCount').textContent = `Buy: ${s.buy_days}天`;
+    document.getElementById('sellCount').textContent = `Sell: ${s.sell_days}天`;
+
+    if (s.has_data) {
+      const sigRes = await fetch(`${API}/api/rf/signals`);
+      const sigs = await sigRes.json();
+      rfSignalMap = {};
+      sigs.forEach(s => { rfSignalMap[s.trade_date] = s.signal; });
+
+      if (sigs.length > 0) {
+        const latest = sigs[sigs.length - 1];
+        const sigEl = document.getElementById('currentSignal');
+        const dateStr = latest.trade_date;
+        const fmtDate = dateStr.slice(0,4)+'-'+dateStr.slice(4,6)+'-'+dateStr.slice(6,8);
+        if (latest.signal === 1) {
+          sigEl.innerHTML = `<span class="signal-badge buy">BUY 持仓</span> <span style="font-size:12px;color:var(--text2)">${fmtDate}</span>`;
+        } else {
+          sigEl.innerHTML = `<span class="signal-badge sell">SELL 空仓</span> <span style="font-size:12px;color:var(--text2)">${fmtDate}</span>`;
+        }
+        sigEl.querySelector('.signal-badge').style.display = 'inline-block';
+      }
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadDates() {
+  const res = await fetch(`${API}/api/ews/dates`);
+  const dates = await res.json();
+  const sel = document.getElementById('dateSelect');
+  sel.innerHTML = '<option value="">选择日期...</option>';
+  dates.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d;
+    opt.textContent = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+    sel.appendChild(opt);
+  });
+
+  // 设置区间涨幅日期选择器的范围
+  if (dates.length > 0) {
+    const minD = dates[dates.length - 1]; // dates 是 DESC
+    const maxD = dates[0];
+    const fmt = s => s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8);
+    document.getElementById('periodStart').min = fmt(minD);
+    document.getElementById('periodStart').max = fmt(maxD);
+    document.getElementById('periodEnd').min = fmt(minD);
+    document.getElementById('periodEnd').max = fmt(maxD);
+  }
+}
+
+// ==================== 区间涨幅 ====================
+async function queryPeriodReturn() {
+  const startEl = document.getElementById('periodStart');
+  const endEl = document.getElementById('periodEnd');
+  if (!startEl.value || !endEl.value) { alert('请选择起止日期'); return; }
+  const start = startEl.value.replace(/-/g, '');
+  const end = endEl.value.replace(/-/g, '');
+  if (start > end) { alert('起始日期不能晚于结束日期'); return; }
+
+  try {
+    const res = await fetch(`${API}/api/rf/period_return?start_date=${start}&end_date=${end}&sector_type=${currentSector}`);
+    if (!res.ok) { const e = await res.json(); alert(e.detail || '查询失败'); return; }
+    const data = await res.json();
+
+    const resultEl = document.getElementById('periodResult');
+    const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    const clsPct = v => v >= 0 ? 'positive' : 'negative';
+
+    resultEl.innerHTML = `
+      <div class="pr-item"><div class="label">策略涨幅</div><div class="value ${clsPct(data.strategy_return)}">${fmtPct(data.strategy_return)}</div></div>
+      <div class="pr-item"><div class="label">基准涨幅(上证)</div><div class="value ${clsPct(data.benchmark_return)}">${fmtPct(data.benchmark_return)}</div></div>
+      <div class="pr-item"><div class="label">超额收益</div><div class="value" style="color:${data.excess_return>=0?'var(--red)':'var(--green)'}">${fmtPct(data.excess_return)}</div></div>
+      <div class="pr-item"><div class="label">最大回撤</div><div class="value" style="color:var(--green)">${data.max_drawdown.toFixed(2)}%</div></div>
+      <div class="pr-item"><div class="label">胜率</div><div class="value">${data.win_rate.toFixed(1)}%</div></div>
+      <div class="pr-item"><div class="label">Buy占比</div><div class="value" style="color:var(--red)">${data.buy_pct.toFixed(1)}%</div></div>
+      <div class="pr-item"><div class="label">交易日</div><div class="value">${data.trading_days}</div></div>
+    `;
+    resultEl.classList.add('show');
+
+    // 同时让图表也只显示该区间
+    const frame = document.getElementById('backtestChartFrame');
+    frame.src = `${API}/api/rf/chart/backtest?sector_type=${currentSector}&start_date=${start}&end_date=${end}&_t=${Date.now()}`;
+  } catch(e) { alert('查询失败: ' + e.message); }
+}
+
+function clearPeriodReturn() {
+  document.getElementById('periodStart').value = '';
+  document.getElementById('periodEnd').value = '';
+  document.getElementById('periodResult').classList.remove('show');
+  // 恢复完整图表
+  const frame = document.getElementById('backtestChartFrame');
+  frame.src = `${API}/api/rf/chart/backtest?sector_type=${currentSector}&_t=${Date.now()}`;
+}
+
+// ==================== 榜单 ====================
+async function loadRanking() {
+  const date = document.getElementById('dateSelect').value;
+  if (!date) return;
+  let url = `${API}/api/ews/ranking?date=${date}`;
+  if (currentSector !== 'all') url += `&sector_type=${currentSector}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    document.getElementById('rankingBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text2)">该日期无数据</td></tr>';
+    return;
+  }
+  allRanking = await res.json();
+  const tbody = document.getElementById('rankingBody');
+  tbody.innerHTML = allRanking.map((r, i) => {
+    const rank = i + 1;
+    const rc = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
+    const sc = r.final_score>0?'positive':r.final_score<0?'negative':'';
+    const mc = r.momentum>0?'positive':r.momentum<0?'negative':'';
+    const st = r.sector_type||'concept';
+    const tagClass = st==='industry'?'industry':'concept';
+    const tagText = st==='industry'?'行业':'概念';
+    const rfSig = rfSignalMap[date];
+    const rfClass = rfSig === 1 ? 'buy' : rfSig === -1 ? 'sell' : '';
+    const rfText = rfSig === 1 ? 'Buy' : rfSig === -1 ? 'Sell' : '-';
+    return `<tr onclick="showDetail('${r.concept_code}')" style="cursor:pointer">
+      <td class="rank ${rc}">${rank}</td>
+      <td><span class="rf-tag ${rfClass}">${rfText}</span></td>
+      <td><span class="type-tag ${tagClass}">${tagText}</span></td>
+      <td style="font-weight:500">${r.concept_name}</td>
+      <td class="score ${sc}">${r.final_score.toFixed(3)}</td>
+      <td class="momentum ${mc}">${r.momentum.toFixed(3)}%</td>
+      <td>${r.emotion_diff.toFixed(3)}</td>
+      <td>${r.s_score.toFixed(3)}</td>
+      <td style="color:var(--red);font-weight:500">${r.limit_up_count}</td>
+      <td style="color:var(--yellow)">${r.broken_count}</td>
+      <td style="color:var(--red);font-weight:500">${r.max_streak}</td>
+      <td>${r.up_count}/${r.total_stocks}</td>
+    </tr>`;
+  }).join('');
+
+  const conSel = document.getElementById('conceptSelect');
+  if (conSel.options.length <= 1) {
+    allRanking.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.concept_code;
+      const st = (r.sector_type||'concept')==='industry'?'[行业]':'[概念]';
+      opt.textContent = st + ' ' + r.concept_name;
+      conSel.appendChild(opt);
+    });
+  }
+}
+
+document.getElementById('dateSelect').addEventListener('change', loadRanking);
+
+// ==================== 回测 ====================
+async function loadBacktest() {
+  try {
+    const res = await fetch(`${API}/api/rf/backtest?sector_type=${currentSector}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.length === 0) return;
+
+    const returns = data.map(d => d.daily_return);
+    const cumReturns = data.map(d => d.cum_return);
+    const totalReturn = cumReturns[cumReturns.length - 1];
+    const totalPct = ((totalReturn - 1) * 100).toFixed(2);
+
+    let maxDD = 0, peak = 1;
+    cumReturns.forEach(v => { if(v>peak)peak=v; const dd=(peak-v)/peak; if(dd>maxDD)maxDD=dd; });
+
+    const wins = returns.filter(r => r > 0).length;
+    const winRate = ((wins / returns.length) * 100).toFixed(1);
+    const avgReturn = (returns.reduce((a,b) => a+b, 0) / returns.length).toFixed(4);
+    const buyDays = data.filter(d => d.rf_signal === 1).length;
+    const buyPct = ((buyDays / data.length) * 100).toFixed(1);
+
+    const retEl = document.getElementById('btReturn');
+    retEl.textContent = (totalReturn >= 1 ? '+' : '') + totalPct + '%';
+    retEl.className = 'value ' + (totalReturn >= 1 ? 'positive' : 'negative');
+    document.getElementById('btDrawdown').textContent = '-' + (maxDD*100).toFixed(2) + '%';
+    document.getElementById('btDrawdown').style.color = 'var(--red)';
+    document.getElementById('btWinRate').textContent = winRate + '%';
+    document.getElementById('btBuyPct').textContent = buyPct + '%';
+    document.getElementById('btAvgReturn').textContent = avgReturn + '%';
+
+    const frame = document.getElementById('backtestChartFrame');
+    frame.src = `${API}/api/rf/chart/backtest?sector_type=${currentSector}&_t=${Date.now()}`;
+  } catch(e) { console.error(e); }
+}
+
+// ==================== 概念详情 ====================
+async function showDetail(code) {
+  const panel = document.getElementById('detailPanel');
+  panel.classList.add('show');
+  const item = allRanking.find(r => r.concept_code === code);
+  if (item) {
+    document.getElementById('detailName').textContent = item.concept_name;
+    document.getElementById('detailCode').textContent = code;
+  }
+  const res = await fetch(`${API}/api/ews/concept/${code}`);
+  if (!res.ok) return;
+  const history = await res.json();
+
+  const scores = history.map(h => h.final_score);
+  const avgScore = (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(3);
+  const maxScore = Math.max(...scores).toFixed(3);
+  const avgLimit = (history.map(h=>h.limit_up_count).reduce((a,b)=>a+b,0)/history.length).toFixed(1);
+  const maxStreak = Math.max(...history.map(h=>h.max_streak));
+  const latestRank = allRanking.findIndex(r => r.concept_code === code) + 1;
+
+  document.getElementById('detailStats').innerHTML = `
+    <div class="ds-item"><div class="label">最新排名</div><div class="value">#${latestRank||'-'}</div></div>
+    <div class="ds-item"><div class="label">平均得分</div><div class="value">${avgScore}</div></div>
+    <div class="ds-item"><div class="label">最高得分</div><div class="value" style="color:var(--green)">${maxScore}</div></div>
+    <div class="ds-item"><div class="label">最高连板</div><div class="value" style="color:var(--red)">${maxStreak}</div></div>
+    <div class="ds-item"><div class="label">日均涨停</div><div class="value" style="color:var(--red)">${avgLimit}</div></div>
+    <div class="ds-item"><div class="label">统计天数</div><div class="value">${history.length}</div></div>
+  `;
+
+  document.getElementById('detailChartFrame').src = `${API}/api/ews/chart/detail/${code}`;
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('show');
+  document.getElementById('detailChartFrame').src = 'about:blank';
+}
+
+// ==================== 历史Tab ====================
+document.getElementById('conceptSelect').addEventListener('change', async function() {
+  const code = this.value;
+  if (!code) return;
+  const res = await fetch(`${API}/api/ews/concept/${code}`);
+  if (!res.ok) return;
+  const history = await res.json();
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = history.map(h => {
+    const sc = h.final_score>0?'color:var(--green)':h.final_score<0?'color:var(--red)':'';
+    const mc = h.momentum>0?'color:var(--red)':h.momentum<0?'color:var(--green)':'';
+    const rfSig = rfSignalMap[h.trade_date];
+    const rfClass = rfSig === 1 ? 'buy' : rfSig === -1 ? 'sell' : '';
+    const rfText = rfSig === 1 ? 'Buy' : rfSig === -1 ? 'Sell' : '-';
+    return `<tr>
+      <td>${h.trade_date}</td>
+      <td><span class="rf-tag ${rfClass}">${rfText}</span></td>
+      <td style="${sc};font-weight:600">${h.final_score.toFixed(3)}</td>
+      <td style="${mc}">${h.momentum.toFixed(3)}%</td>
+      <td>${h.emotion_diff.toFixed(3)}</td>
+      <td>${h.s_score.toFixed(3)}</td>
+      <td style="color:var(--red)">${h.limit_up_count}</td>
+      <td style="color:var(--yellow)">${h.broken_count}</td>
+      <td style="color:var(--red)">${h.max_streak}</td>
+    </tr>`;
+  }).join('');
+});
+
+// ==================== 计算控制 ====================
+async function startRefresh() {
+  // 增量刷新：自动计算新日期的EW-SDM因子 + RF信号 + 回测
+  try {
+    const res = await fetch('/api/rf/refresh', { method: 'POST' });
+    if (res.status === 409) { alert((await res.json()).detail); return; }
+    document.getElementById('refreshBtn').disabled = true;
+    document.getElementById('calcBtn').disabled = true;
+    showCalcStatus(true);
+    pollRefreshStatus();
+  } catch(e) { alert('请求失败: '+e.message); }
+}
+
+async function pollRefreshStatus() {
+  const check = async () => {
+    const s = await (await fetch('/api/rf/status')).json();
+    if (s.calc_running) {
+      const pct = s.calc_total>0?(s.calc_progress/s.calc_total*100).toFixed(0):0;
+      document.getElementById('progressFill').style.width = pct+'%';
+      document.getElementById('progressText').textContent = s.calc_message;
+      setTimeout(check, 1500);
+    } else {
+      showCalcStatus(false);
+      document.getElementById('refreshBtn').disabled = false;
+      document.getElementById('calcBtn').disabled = false;
+      await loadRFStatus();
+      await loadBacktest();
+      await loadDates();
+      const sel = document.getElementById('dateSelect');
+      if (sel.options.length > 1) { sel.selectedIndex = 1; loadRanking(); }
+    }
+  };
+  check();
+}
+
+async function startCalc() {
+  try {
+    const res = await fetch('/api/rf/calculate', { method: 'POST' });
+    if (res.status === 409) { alert((await res.json()).detail); return; }
+    document.getElementById('calcBtn').disabled = true;
+    showCalcStatus(true);
+    pollCalcStatus();
+  } catch(e) { alert('请求失败: '+e.message); }
+}
+
+function showCalcStatus(show) {
+  document.getElementById('calcStatus').style.display = show?'flex':'none';
+  document.getElementById('progressBar').style.display = show?'block':'none';
+}
+
+async function pollCalcStatus() {
+  const check = async () => {
+    const s = await (await fetch('/api/rf/status')).json();
+    if (s.calc_running) {
+      const pct = s.calc_total>0?(s.calc_progress/s.calc_total*100).toFixed(0):0;
+      document.getElementById('progressFill').style.width = pct+'%';
+      document.getElementById('progressText').textContent = s.calc_message;
+      setTimeout(check, 1500);
+    } else {
+      showCalcStatus(false);
+      document.getElementById('calcBtn').disabled = false;
+      await loadRFStatus();
+      await loadBacktest();
+      const sel = document.getElementById('dateSelect');
+      if (sel.options.length > 1) { sel.selectedIndex = 1; loadRanking(); }
+    }
+  };
+  check();
+}
+
+async function pollStatus() {
+  try {
+    const s = await (await fetch('/api/rf/status')).json();
+    if (s.calc_running) {
+      showCalcStatus(true);
+      const pct = s.calc_total>0?(s.calc_progress/s.calc_total*100).toFixed(0):0;
+      document.getElementById('progressFill').style.width = pct+'%';
+      document.getElementById('progressText').textContent = s.calc_message;
+      document.getElementById('calcBtn').disabled = true;
+      setTimeout(pollStatus, 2000);
+    } else {
+      document.getElementById('calcBtn').disabled = false;
+    }
+  } catch(e) {}
+}
+
+function refresh() {
+  loadRFStatus();
+  loadBacktest();
+  loadRanking();
+}
+
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const tab = el.dataset.tab;
+  document.getElementById('tabRanking').style.display = tab==='ranking'?'block':'none';
+  document.getElementById('tabHistory').style.display = tab==='history'?'block':'none';
+}
+
+init();
+</script>
+</body>
+</html>

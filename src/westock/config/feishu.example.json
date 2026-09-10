@@ -1,0 +1,7 @@
+{
+  "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_WITH_YOUR_WEBHOOK",
+  "secret": "",
+  "enabled": true,
+  "dashboardUrl": "https://<your-github-username>.github.io/<your-repo>/",
+  "note": "飞书群自定义机器人推送配置。webhook 在飞书群设置→添加机器人→自定义机器人 获取；dashboardUrl 为 HTML 报告的公网地址（GitHub Pages / OSS），卡片底部的『📊 HTML报告』『📈 行业情绪交互页』按钮用它，留空则不显示按钮。enabled=false 或 webhook 仍为占位串时，推送脚本会安全跳过。"
+}

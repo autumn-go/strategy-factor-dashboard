@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行业拥挤度监测 - 策略因子平台</title>
+<style>
+:root {
+  --bg: #0a0e17; --bg2: #111827; --bg3: #1a2234;
+  --border: #2a3548; --text: #e2e8f0; --text2: #94a3b8;
+  --accent: #3b82f6; --accent2: #60a5fa;
+  --red: #ef4444; --green: #22c55e; --yellow: #f59e0b; --purple: #a855f7;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height:100vh; }
+.header { background: var(--bg2); border-bottom:1px solid var(--border); padding:16px 30px; display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:18px; font-weight:600; }
+.header h1 a { color:var(--accent2); text-decoration:none; }
+.controls { display:flex; gap:12px; align-items:center; }
+.controls select, .controls button { background:var(--bg3); color:var(--text); border:1px solid var(--border); padding:6px 14px; border-radius:6px; font-size:13px; cursor:pointer; }
+.controls button:hover { border-color:var(--accent); }
+.btn-primary { background:var(--accent) !important; border-color:var(--accent) !important; color:#fff !important; }
+.btn-primary:hover { background:#2563eb !important; }
+.btn-danger { background:var(--red) !important; border-color:var(--red) !important; color:#fff !important; }
+.btn-warn { background:var(--yellow) !important; border-color:var(--yellow) !important; color:#000 !important; }
+
+.container { padding:20px 30px; max-width:1400px; margin:0 auto; }
+
+/* 统计卡片 */
+.stats-bar { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:20px; }
+.stat-card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:14px; text-align:center; }
+.stat-card .label { font-size:11px; color:var(--text2); margin-bottom:4px; }
+.stat-card .value { font-size:22px; font-weight:700; }
+.stat-card .value.red { color:var(--red); }
+.stat-card .value.yellow { color:var(--yellow); }
+.stat-card .value.green { color:var(--green); }
+.stat-card .value.purple { color:var(--purple); }
+
+/* 进度条 */
+.progress-bar { display:none; background:var(--bg3); border-radius:6px; height:28px; margin-bottom:16px; position:relative; overflow:hidden; }
+.progress-bar.show { display:block; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:6px; transition:width 0.3s; }
+.progress-text { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:12px; color:#fff; z-index:1; }
+
+/* 表格 */
+.table-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.table-header { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.table-header .title { font-size:14px; font-weight:600; }
+.filter-row { display:flex; gap:8px; align-items:center; }
+.filter-row select { background:var(--bg3); color:var(--text); border:1px solid var(--border); padding:4px 10px; border-radius:4px; font-size:12px; }
+
+table { width:100%; border-collapse:collapse; font-size:13px; }
+thead th { background:var(--bg3); color:var(--text2); font-weight:500; padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); position:sticky; top:0; cursor:pointer; }
+thead th:hover { color:var(--text); }
+tbody tr { border-bottom:1px solid rgba(42,53,72,0.5); }
+tbody tr:hover { background:rgba(59,130,246,0.05); }
+tbody td { padding:7px 12px; }
+
+/* 得分标签 */
+.score-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:600; }
+.score-0 { background:rgba(34,197,94,0.15); color:#22c55e; }
+.score-1 { background:rgba(96,165,250,0.15); color:#60a5fa; }
+.score-2 { background:rgba(245,158,11,0.15); color:#f59e0b; }
+.score-3 { background:rgba(249,115,22,0.15); color:#f97316; }
+.score-4 { background:rgba(239,68,68,0.15); color:#ef4444; }
+
+.alert-0 { color:var(--green); }
+.alert-1 { color:#60a5fa; }
+.alert-2 { color:var(--yellow); }
+.alert-3 { color:#f97316; font-weight:700; }
+.alert-4 { color:var(--red); font-weight:700; }
+
+.sub-score { font-size:11px; color:var(--text2); }
+.sub-on { color:var(--red); font-weight:600; }
+
+/* 弹窗 */
+.modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:100; }
+.modal-overlay.show { display:flex; align-items:center; justify-content:center; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:12px; width:90%; max-width:900px; max-height:85vh; overflow-y:auto; }
+.modal-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.modal-header h3 { font-size:16px; }
+.modal-close { background:none; border:none; color:var(--text2); font-size:20px; cursor:pointer; }
+.modal-body { padding:16px 20px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1><a href="/">策略因子平台</a> / 行业拥挤度监测</h1>
+  <div class="controls">
+    <select id="dateSelect"></select>
+    <button class="btn-primary" onclick="refresh()">增量刷新</button>
+    <button class="btn-warn" onclick="fullCalc()">全量重算</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="stats-bar">
+    <div class="stat-card"><div class="label">行业数</div><div class="value" id="statIndustries">-</div></div>
+    <div class="stat-card"><div class="label">4 高潮</div><div class="value red" id="statAlert4">-</div></div>
+    <div class="stat-card"><div class="label">3 加速</div><div class="value" id="statAlert3" style="color:#f97316">-</div></div>
+    <div class="stat-card"><div class="label">2 上升</div><div class="value yellow" id="statAlert2">-</div></div>
+    <div class="stat-card"><div class="label">1 起势</div><div class="value" id="statAlert1" style="color:#60a5fa">-</div></div>
+    <div class="stat-card"><div class="label">0 安全</div><div class="value green" id="statAlert0">-</div></div>
+  </div>
+
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    <div class="progress-text" id="progressText">准备中...</div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="title" id="tableTitle">行业拥挤度排名</span>
+      <div class="filter-row">
+        <select id="filterAlert" onchange="renderTable()">
+          <option value="">全部</option>
+          <option value="4">4 高潮</option>
+          <option value="3">3 加速</option>
+          <option value="2">2 上升</option>
+          <option value="1">1 起势</option>
+          <option value="0">0 安全</option>
+        </select>
+        <select id="sortBy" onchange="renderTable()">
+          <option value="total_score">总分</option>
+          <option value="score1">S1 乖离率</option>
+          <option value="score2">S2 动量</option>
+          <option value="score3">S3 换手率</option>
+          <option value="score4">S4 换手乖离</option>
+          <option value="alert_level">阶段等级</option>
+        </select>
+      </div>
+    </div>
+    <div style="max-height:calc(100vh - 300px); overflow-y:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>行业</th>
+            <th>总分</th>
+            <th>S1 乖离率</th>
+            <th>S2 动量</th>
+            <th>S3 换手率</th>
+            <th>S4 换手乖离</th>
+            <th>阶段</th>
+            <th>详情</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 行业详情弹窗 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">行业详情</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalChart" style="height:720px"></div>
+      <div id="modalIndicators" style="margin-top:16px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+let allData = [];
+let allDates = [];
+
+async function loadStatus() {
+  const res = await fetch(`${API}/api/crowdiness/status`);
+  const s = await res.json();
+
+  // 日期范围放页面标题
+
+  // 统计
+  const dist = s.score_dist || {};
+  document.getElementById('statIndustries').textContent = s.total_records > 0
+    ? Object.values(dist).reduce((a,b) => a+b, 0) : '-';
+
+  const alertDist = s.alert_dist || {};
+  document.getElementById('statAlert4').textContent = alertDist['4'] || 0;
+  document.getElementById('statAlert3').textContent = alertDist['3'] || 0;
+  document.getElementById('statAlert2').textContent = alertDist['2'] || 0;
+  document.getElementById('statAlert1').textContent = alertDist['1'] || 0;
+  document.getElementById('statAlert0').textContent = alertDist['0'] || 0;
+
+  // 进度
+  if (s.calc_running) {
+    document.getElementById('progressBar').classList.add('show');
+    const pct = s.calc_total > 0 ? Math.round(s.calc_progress / s.calc_total * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressText').textContent = `${s.calc_message} (${pct}%)`;
+    setTimeout(loadStatus, 2000);
+  } else {
+    document.getElementById('progressBar').classList.remove('show');
+  }
+}
+
+async function loadDates() {
+  const res = await fetch(`${API}/api/crowdiness/dates`);
+  allDates = await res.json();
+  const sel = document.getElementById('dateSelect');
+  sel.innerHTML = allDates.map(d => {
+    const fmt = d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+    return `<option value="${d}">${fmt}</option>`;
+  }).join('');
+  if (allDates.length > 0) loadRanking();
+}
+
+async function loadRanking() {
+  const date = document.getElementById('dateSelect').value;
+  if (!date) return;
+  const res = await fetch(`${API}/api/crowdiness/ranking?trade_date=${date}`);
+  allData = await res.json();
+  renderTable();
+}
+
+function renderTable() {
+  const filter = document.getElementById('filterAlert').value;
+  const sortBy = document.getElementById('sortBy').value;
+
+  let data = [...allData];
+  if (filter !== '') data = data.filter(d => d.alert_level >= parseInt(filter));
+
+  // 排序
+  const sortKey = {
+    total_score: 'total_score',
+    score1: 'score1_deviation',
+    score2: 'score2_momentum',
+    score3: 'score3_turnover',
+    score4: 'score4_tr_bias',
+    alert_level: 'alert_level',
+  }[sortBy] || 'total_score';
+  data.sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0));
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = data.map((d, i) => {
+    const scoreClass = `score-${d.total_score}`;
+    const alertLabels = ['安全', '起势', '上升', '加速', '高潮'];
+    const alertText = alertLabels[d.alert_level] || '安全';
+    const alertClass = `alert-${d.alert_level}`;
+    const fmtScore = (v) => v ? `<span class="sub-on">1</span>` : `<span class="sub-score">0</span>`;
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${d.industry_name || d.industry_code}</td>
+      <td><span class="score-badge ${scoreClass}">${d.total_score}</span></td>
+      <td>${fmtScore(d.score1_deviation)}</td>
+      <td>${fmtScore(d.score2_momentum)}</td>
+      <td>${fmtScore(d.score3_turnover)}</td>
+      <td>${fmtScore(d.score4_tr_bias)}</td>
+      <td><span class="${alertClass}">${alertText}</span></td>
+      <td><button style="background:none;border:1px solid var(--border);color:var(--accent2);padding:2px 10px;border-radius:4px;cursor:pointer;font-size:12px" onclick="showDetail('${d.industry_code}','${d.industry_name}')">查看</button></td>
+    </tr>`;
+  }).join('');
+
+  const date = document.getElementById('dateSelect').value;
+  const fmt = date?.slice(0,4)+'-'+date?.slice(4,6)+'-'+date?.slice(6,8);
+  document.getElementById('tableTitle').textContent = `${fmt} 行业拥挤度排名 (${data.length}个行业)`;
+}
+
+function showDetail(code, name) {
+  document.getElementById('modal').classList.add('show');
+  document.getElementById('modalTitle').textContent = `${name || code} 拥挤度详情`;
+  const frame = document.getElementById('modalChart');
+  frame.innerHTML = '<iframe src="" style="width:100%;height:720px;border:none" id="detailFrame"></iframe>';
+  document.getElementById('detailFrame').src = `${API}/api/crowdiness/chart/${code}?_t=${Date.now()}`;
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+async function refresh() {
+  const res = await fetch(`${API}/api/crowdiness/refresh`, {method:'POST'});
+  const data = await res.json();
+  if (data.status === 'already_running') { alert('正在计算中'); return; }
+  loadStatus();
+  setTimeout(() => { loadDates(); loadStatus(); }, 5000);
+}
+
+async function fullCalc() {
+  if (!confirm('全量重算需要较长时间，确定？')) return;
+  const res = await fetch(`${API}/api/crowdiness/calculate`, {method:'POST'});
+  const data = await res.json();
+  if (data.status === 'already_running') { alert('正在计算中'); return; }
+  loadStatus();
+  // 持续轮询直到完成
+  const poll = setInterval(async () => {
+    const s = await (await fetch(`${API}/api/crowdiness/status`)).json();
+    if (!s.calc_running) {
+      clearInterval(poll);
+      loadDates();
+      loadStatus();
+    } else {
+      const pct = s.calc_total > 0 ? Math.round(s.calc_progress / s.calc_total * 100) : 0;
+      document.getElementById('progressBar').classList.add('show');
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressText').textContent = `${s.calc_message} (${pct}%)`;
+    }
+  }, 3000);
+}
+
+// 日期切换
+document.getElementById('dateSelect').addEventListener('change', loadRanking);
+
+// 点击弹窗外关闭
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// 初始化
+loadStatus();
+loadDates();
+</script>
+</body>
+</html>

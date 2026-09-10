@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>流动性监测 - 中证2000</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #1e293b;
+        }
+        .header h1 {
+            font-size: 20px; font-weight: 600; color: #f1f5f9;
+        }
+        .header .subtitle { font-size: 13px; color: #64748b; margin-top: 2px; }
+
+        .btn {
+            padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 13px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+        .btn-outline { background: transparent; color: #94a3b8; border: 1px solid #334155; }
+        .btn-outline:hover { border-color: #475569; color: #e2e8f0; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+        .card {
+            background: #1e293b; border-radius: 8px; padding: 16px;
+            border: 1px solid #334155;
+        }
+        .card-title { font-size: 13px; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-value { font-size: 24px; font-weight: 700; color: #f1f5f9; }
+        .card-value.green { color: #22c55e; }
+        .card-value.red { color: #ef4444; }
+        .card-value.blue { color: #3b82f6; }
+        .card-value.yellow { color: #f59e0b; }
+        .card-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+        .chart-container {
+            background: #1e293b; border-radius: 8px; overflow: hidden;
+            border: 1px solid #334155; margin-bottom: 16px;
+        }
+        .chart-container iframe { width: 100%; height: 450px; border: none; display: block; }
+
+        .params-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px;
+        }
+        .param-item {
+            background: #0f172a; border-radius: 4px; padding: 8px 10px;
+            font-size: 12px;
+        }
+        .param-item .label { color: #64748b; }
+        .param-item .value { color: #e2e8f0; font-weight: 500; }
+
+        .trades-table {
+            width: 100%; border-collapse: collapse; font-size: 13px;
+        }
+        .trades-table th {
+            text-align: left; padding: 8px 10px; background: #0f172a;
+            color: #64748b; font-weight: 500; border-bottom: 1px solid #334155;
+        }
+        .trades-table td {
+            padding: 8px 10px; border-bottom: 1px solid #1e293b;
+        }
+        .trades-table tr:hover { background: rgba(59,130,246,0.05); }
+        .win { color: #22c55e; font-weight: 600; }
+        .loss { color: #ef4444; font-weight: 600; }
+
+        .status-bar {
+            background: #1e293b; border-radius: 6px; padding: 10px 14px;
+            font-size: 13px; color: #64748b; margin-bottom: 16px;
+            border: 1px solid #334155;
+        }
+        .status-bar.running { border-color: #3b82f6; color: #3b82f6; }
+
+        .nav { display: flex; gap: 8px; margin-bottom: 16px; }
+        .nav a {
+            padding: 6px 12px; border-radius: 6px; font-size: 13px;
+            color: #94a3b8; text-decoration: none; transition: all 0.2s;
+        }
+        .nav a:hover { background: #1e293b; color: #e2e8f0; }
+        .nav a.active { background: #3b82f6; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>流动性监测</h1>
+                <div class="subtitle">Range Filter + 双层入场(WT/RSI/RSI9) + 停滞离场 | 中证2000</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-outline" id="refreshBtn" onclick="refresh()">增量刷新</button>
+                <button class="btn btn-primary" id="calcBtn" onclick="calculate()">全量计算</button>
+                <a href="/" class="btn btn-outline">首页</a>
+            </div>
+        </div>
+
+        <div class="nav">
+            <a href="/">EW-SDM</a>
+            <a href="/rf">RF-EWSDM</a>
+            <a href="/boci">BOCI</a>
+            <a href="/index-sentiment">指数情绪</a>
+            <a href="/lc" class="active">流动性监测</a>
+        </div>
+
+        <div class="status-bar" id="statusBar">加载中...</div>
+
+        <div class="grid-3" id="statsCards">
+            <div class="card">
+                <div class="card-title">交易胜率</div>
+                <div class="card-value green" id="tradeWR">--</div>
+                <div class="card-sub" id="tradeInfo"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">策略净值</div>
+                <div class="card-value blue" id="finalNV">--</div>
+                <div class="card-sub" id="nvInfo"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">最大回撤</div>
+                <div class="card-value red" id="maxDD">--</div>
+                <div class="card-sub" id="ddInfo"></div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <iframe id="chartFrame" src="about:blank"></iframe>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:12px;">交易明细</div>
+            <div style="overflow-x:auto;">
+                <table class="trades-table" id="tradesTable">
+                    <thead>
+                        <tr>
+                            <th>入场日期</th>
+                            <th>离场日期</th>
+                            <th>持仓天数</th>
+                            <th>盈亏%</th>
+                            <th>结果</th>
+                            <th>离场原因</th>
+                            <th>入场WT</th>
+                            <th>入场RSI14</th>
+                            <th>入场RSI9</th>
+                            <th>LC预测</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradesBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title" style="margin-bottom:12px;">策略参数</div>
+            <div class="params-grid" id="paramsGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/lc';
+
+        async function loadStatus() {
+            const resp = await fetch(`${API}/status`);
+            const data = await resp.json();
+            const bar = document.getElementById('statusBar');
+
+            if (data.calc_running) {
+                bar.className = 'status-bar running';
+                bar.textContent = data.calc_message || '计算中...';
+                document.getElementById('calcBtn').disabled = true;
+                setTimeout(loadStatus, 2000);
+            } else {
+                bar.className = 'status-bar';
+                if (data.has_data) {
+                    bar.textContent = `数据: ${data.min_date} ~ ${data.max_date} | ${data.total_days}天 | ${data.bt_records}条回测`;
+                } else {
+                    bar.textContent = '暂无数据，请先点击"计算"';
+                }
+                document.getElementById('calcBtn').disabled = false;
+            }
+
+            // 更新统计卡片
+            if (data.n_trades > 0) {
+                document.getElementById('tradeWR').textContent = data.trade_win_rate + '%';
+                document.getElementById('tradeInfo').textContent = data.n_trades + '笔交易';
+            }
+
+            // 参数
+            if (data.params) {
+                const grid = document.getElementById('paramsGrid');
+                const labels = {
+                    'rf_period': 'RF周期', 'rf_multiplier': 'RF倍数',
+                    'k_neighbors': 'KNN K值',
+                    'wt_min_flip': '翻转WT最低', 'rsi_min_flip': '翻转RSI最低',
+                    'wt_min_hold': '持仓WT最低', 'rsi_min_hold': '持仓RSI最低', 'rsi9_min_hold': '持仓RSI9最低',
+                    'stop_atr_mult': '止损ATR', 'trail_atr_mult': '移动止盈ATR',
+                    'trail_tighten': '止盈收紧', 'stagnant_days': '停滞天数',
+                    'index_name': '标的指数', 'backtest_start': '回测起始',
+                };
+                grid.innerHTML = '';
+                for (const [k, v] of Object.entries(data.params)) {
+                    if (typeof v === 'object') continue;
+                    const item = document.createElement('div');
+                    item.className = 'param-item';
+                    item.innerHTML = `<span class="label">${labels[k] || k}</span>: <span class="value">${v}</span>`;
+                    grid.appendChild(item);
+                }
+            }
+        }
+
+        async function loadBacktest() {
+            const resp = await fetch(`${API}/status`);
+            const status = await resp.json();
+            if (!status.has_backtest) return;
+
+            // 加载图表
+            document.getElementById('chartFrame').src = `${API}/chart/backtest`;
+
+            // 加载回测统计
+            const btResp = await fetch(`${API}/backtest`);
+            const btData = await btResp.json();
+            if (btData.length > 0) {
+                const final = btData[btData.length - 1];
+                document.getElementById('finalNV').textContent = final.cum_return.toFixed(4);
+
+                // 计算最大回撤
+                let maxDD = 0, peak = 1;
+                let buyDays = 0, flatDays = 0;
+                for (const r of btData) {
+                    if (r.cum_return > peak) peak = r.cum_return;
+                    const dd = (peak - r.cum_return) / peak;
+                    if (dd > maxDD) maxDD = dd;
+                    if (r.lc_signal === 1) buyDays++; else flatDays++;
+                }
+                document.getElementById('maxDD').textContent = (-maxDD * 100).toFixed(2) + '%';
+                document.getElementById('nvInfo').textContent = `持仓${buyDays}天 / 空仓${flatDays}天`;
+                document.getElementById('ddInfo').textContent = `总${btData.length}天`;
+            }
+
+            // 加载交易明细
+            const tradesResp = await fetch(`${API}/trades`);
+            const trades = await tradesResp.json();
+            const tbody = document.getElementById('tradesBody');
+            tbody.innerHTML = '';
+            for (const t of trades) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${t.entry_date}</td>
+                    <td>${t.exit_date}</td>
+                    <td>${t.hold_days}</td>
+                    <td class="${t.win ? 'win' : 'loss'}">${t.profit_pct > 0 ? '+' : ''}${t.profit_pct}%</td>
+                    <td class="${t.win ? 'win' : 'loss'}">${t.win ? 'WIN' : 'LOSS'}</td>
+                    <td>${t.exit_reason}</td>
+                    <td>${t.entry_wt}</td>
+                    <td>${t.entry_rsi}</td>
+                    <td>${t.entry_rsi9 || '--'}</td>
+                    <td>${t.entry_pred}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        async function calculate() {
+            document.getElementById('calcBtn').disabled = true;
+            document.getElementById('refreshBtn').disabled = true;
+            await fetch(`${API}/calculate`, { method: 'POST' });
+            setTimeout(loadStatus, 1000);
+            // 等待计算完成
+            const check = setInterval(async () => {
+                const resp = await fetch(`${API}/status`);
+                const data = await resp.json();
+                if (!data.calc_running) {
+                    clearInterval(check);
+                    loadStatus();
+                    loadBacktest();
+                    document.getElementById('calcBtn').disabled = false;
+                    document.getElementById('refreshBtn').disabled = false;
+                }
+            }, 3000);
+        }
+
+        async function refresh() {
+            document.getElementById('refreshBtn').disabled = true;
+            document.getElementById('calcBtn').disabled = true;
+            const resp = await fetch(`${API}/refresh`, { method: 'POST' });
+            const data = await resp.json();
+            setTimeout(loadStatus, 1000);
+            // 等待刷新完成
+            const check = setInterval(async () => {
+                const st = await (await fetch(`${API}/status`)).json();
+                if (!st.calc_running) {
+                    clearInterval(check);
+                    loadStatus();
+                    loadBacktest();
+                    document.getElementById('refreshBtn').disabled = false;
+                    document.getElementById('calcBtn').disabled = false;
+                }
+            }, 3000);
+        }
+
+        // 初始化
+        loadStatus();
+        loadBacktest();
+    </script>
+</body>
+</html>
