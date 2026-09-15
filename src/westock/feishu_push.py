@@ -125,6 +125,15 @@ def build_md(d):
 
     lines = [f"**策略因子平台 · 最新信号**", f"交易日 {td}", ""]
 
+    # 行情滞后告警（见 run_latest.py 的"防呆对时"）——放最顶部，手机上第一眼可见
+    lag = d.get('data_lag') or None
+    if lag:
+        lines.append(
+            f"⚠️ **行情数据滞后告警**：策略交易日 {lag.get('strategy_date','?')} "
+            f"< 市场最新交易日 **{lag.get('market_date','?')}**，"
+            f"下列结果可能已陈旧，请检查数据刷新链路。")
+        lines.append("")
+
     # EW-SDM
     if ews.get('error'):
         lines.append(f"> EW-SDM：{ews['error']}")

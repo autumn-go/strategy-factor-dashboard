@@ -20,16 +20,11 @@ def load_pool():
     return pool
 
 def market_snapshot(date):
-    """上证指数当日收盘/涨跌(用于文案)"""
+    """上证指数当日收盘/涨跌(用于文案)。走 fetch_kline 的统一数据源(腾讯/东财自动切换)。"""
     try:
-        import requests
-        r = requests.get("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get",
-                         params={"param": f"{C.MARKET_INDEX},day,,,2,qfq"},
-                         headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
-        data = (r.json().get("data") or {}).get(C.MARKET_INDEX) or {}
-        kl = data.get("qfqday") or data.get("day") or []
-        if kl and kl[-1][0] == date and len(kl) >= 2:
-            c0, c1 = float(kl[-1][2]), float(kl[-2][2])
+        rows = fetch_kline.fetch_klines(C.MARKET_INDEX, 3)
+        if rows and rows[-1][0] == date and len(rows) >= 2:
+            c0, c1 = rows[-1][4], rows[-2][4]
             return {"date": date, "close": c0, "chg": round((c0 / c1 - 1) * 100, 2)}
     except Exception:
         pass
@@ -73,6 +68,8 @@ def main():
     os.makedirs(C.OUT_DIR, exist_ok=True)
 
     # 1. 交易日判断: 上证指数最近一根日K是否=目标日
+    src = fetch_kline.resolve_source()
+    logp(f"数据源 {src}")
     lb = fetch_kline.last_bar_date(C.MARKET_INDEX)
     if lb != args.date:
         logp(f"{args.date} 非交易日(上证最近K线日期={lb}),跳过。")
@@ -91,7 +88,7 @@ def main():
     if not args.skip_fetch:
         ok, short, fail, nbars, dt = fetch_kline.fetch_pool(
             list(pool.keys()), C.DATA_DIR, C.FETCH_BARS, keep_today=args.date)
-        logp(f"抓K线 ok={ok} short={short} fail={fail} bars={nbars} {dt:.0f}s")
+        logp(f"抓K线({fetch_kline.resolve_source()}) ok={ok} short={short} fail={fail} bars={nbars} {dt:.0f}s")
         if ok < len(pool) * 0.9:
             logp("抓取成功率过低,中止。")
             return 1

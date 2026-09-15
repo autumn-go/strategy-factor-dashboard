@@ -49,6 +49,9 @@ CLI_JS = (os.environ.get('WESTOCK_CLI_JS', '').strip() or
           'node_modules/westock-data-skillhub/index.js')
 BATCH_SIZE = 50          # 单批标的数量（实测 50 只 2.4s，100% 成功）
 
+# "市场时钟"：用于判断市场最新交易日（增量刷新的基准），必须走指数而非缓存。
+MARKET_CLOCK_INDEX = os.environ.get('MARKET_CLOCK_INDEX', 'sh000001').strip() or 'sh000001'
+
 # 腾讯不提供的指数 -> 用最接近的替代标的（数据源切换导致的映射调整，须在报告中标注）
 INDEX_FALLBACK = {
     '932000.CSI': 'sz399303',   # 中证2000 -> 国证2000（同为小盘代表）
@@ -214,6 +217,30 @@ def cli_kline_batch(tx_codes, start=None, end=None, limit=None, timeout=180):
         return _parse_cli_table(txt, default_sym=dflt), None
     except Exception as e:
         return {}, f'{type(e).__name__}: {e}'
+
+
+def market_latest_date(log=None):
+    """用指数最新K线确定"市场最新交易日"（返回 'YYYYMMDD' 字符串；失败返回 None）。
+
+    为什么必须外挂一个"市场时钟"，而不能只读缓存：
+      增量判断若以"缓存里的最大 trade_date"为基准，当全市场数据都停在同一交易日时，
+      基准本身也停在那里，于是每天都判定为"已是最新"而永久空转。
+      （2026-09-11~15 实际踩坑：行情冻结在 09-10，报告/推送全是旧日期。）
+    调用方约定：返回 None 时应当"宁可全量重取，也不要静默跳过"。
+    """
+    try:
+        m, err = cli_kline_batch([MARKET_CLOCK_INDEX], limit=5)
+        if m:
+            rows = m.get(MARKET_CLOCK_INDEX) or next(iter(m.values()), [])
+            dates = [str(r[0]).replace('-', '') for r in rows if r]
+            if dates:
+                return max(dates)
+        if err and log:
+            log(f'[数据源] 市场时钟取数失败: {err}')
+    except Exception as e:
+        if log:
+            log(f'[数据源] 市场时钟异常: {type(e).__name__}: {e}')
+    return None
 
 
 def fetch_many_cli(tx_codes, start=None, end=None, limit=250, workers=4,
@@ -405,9 +432,24 @@ def refresh_universe(days=120, workers=4, log=print, only_missing_days=True,
         tx = tx[:limit]
     todo = tx
     if only_missing_days:
-        done = set(_read_pickle().tx_code.unique()) if os.path.exists(PICKLE) \
-            else set()
-        todo = [c for c in tx if c not in done]
+        prev = _read_pickle()
+        latest = market_latest_date(log)
+        if latest:
+            # 只有"该标的自身最新日期 < 市场最新交易日"才需要补。
+            # 注意不能用"该代码是否存在于缓存"来判定(历史 bug)：
+            # 9/10 全量建库后，所有代码都存在 -> 每天判定为已最新 -> 永久空转。
+            if len(prev):
+                per_code_last = prev.groupby('tx_code')['trade_date'].max()
+                todo = [c for c in tx
+                        if str(per_code_last.get(c, '')) < latest]
+            else:
+                todo = tx
+            log(f'[数据源] 市场最新交易日 {latest}；'
+                f'待补 {len(todo)} / 全市场 {len(tx)} 只')
+        else:
+            # 拿不到市场时钟时宁可全量重取，也不要静默跳过（跳过=永久陈旧且无告警）
+            log('[数据源] 未取到市场时钟，改为全量刷新（避免静默跳过）')
+            todo = tx
     if not todo:
         log('[数据源] 全部标的已是最新，跳过')
         return {'total': len(tx), 'updated': 0, 'rows': 0, 'fail': 0}

@@ -239,6 +239,19 @@ def build_html(d, bt_stats=None, navs=None, boci=None, etf=None,
     ews = d.get('ews', {}) or {}
     lc = d.get('lc', {}) or {}
 
+    # 行情滞后告警横幅（见 run_latest.py 的"防呆对时"）
+    data_lag = d.get('data_lag') or None
+    stale_banner = ''
+    if data_lag:
+        stale_banner = (
+            "<div style='background:#fff1f0;border:1px solid #ffa39e;"
+            "border-left:5px solid #cf1322;border-radius:6px;"
+            "padding:10px 14px;margin:10px 0;color:#a8071a;font-size:13px'>"
+            "<b>⚠ 行情数据滞后告警</b>：本报告策略交易日 "
+            f"<b>{data_lag.get('strategy_date', '?')}</b>，"
+            f"但市场最新交易日为 <b>{data_lag.get('market_date', '?')}</b>。"
+            "结果可能已陈旧，请检查数据刷新链路（refresh_universe）。</div>")
+
     # 三条净值曲线按策略交易日对齐（缺失填 null，前端 connectNulls）
     navs = navs or {}
     nav_lines, nav_dates = {}, []
@@ -422,6 +435,7 @@ font-size:12px;color:var(--tx3)}}
   <div class="meta">交易日 <b>{td}</b> · 生成于 {gen}</div>
   <div class="meta">数据源 <b>{d.get('data_source','')}</b>
     <span class="badge">已切换</span></div>
+  {stale_banner}
 
   <h2>核心信号</h2>
   <div class="cards">

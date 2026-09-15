@@ -23,7 +23,8 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, ROOT)
 
 from westock_source import (get_daily_df, get_index_daily, get_sector_list,
-                            get_sector_members, to_tx_code)
+                            get_sector_members, to_tx_code,
+                            market_latest_date)
 
 OUT_DIR = os.path.join(HERE, 'output')
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -201,9 +202,25 @@ def main():
     log(f'      个股 {daily_all.ts_code.nunique()} 只, '
         f'{ndays} 个交易日, 最新 {target}')
 
+    # ---- 防呆：策略交易日 vs 市场真实最新交易日 ----
+    # 2026-09-11~15 踩过坑：refresh_universe 的增量判断曾永久空转，导致行情冻结在 09-10
+    # 而整套报告/推送安静地喂了 3 天旧数据。这里主动对时，滞后就大声告警。
+    market_date = market_latest_date(log)
+    data_lag = None
+    if market_date and target < market_date:
+        data_lag = {'strategy_date': target, 'market_date': market_date}
+        log('!' * 60)
+        log(f'!! [告警] 行情数据滞后：策略交易日 {target} < 市场最新交易日 {market_date}')
+        log('!! 请检查 refresh_universe（增量判断 / westock 通道），本次结果可能已陈旧')
+        log('!' * 60)
+    elif market_date:
+        log(f'      [对时] 策略交易日 {target} 与市场最新交易日一致')
+
     results = {'gen_time': t0.strftime('%Y-%m-%d %H:%M:%S'),
                'data_source': '腾讯自选股(westock同源) + 本地静态映射',
-               'trade_date': target}
+               'trade_date': target,
+               'market_date': market_date,
+               'data_lag': data_lag}
 
     log('[2/3] EW-SDM 情绪加权扩散动量 ...')
     try:
